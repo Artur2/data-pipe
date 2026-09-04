@@ -1,0 +1,10 @@
+[package]
+name = "data-pipe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sockudo-ws = { version = "2.0.1", features = ["full"] }
+tokio = "1.53.1"
+regex = "1.13.1"
+log = "0.4.34"
