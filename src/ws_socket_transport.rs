@@ -10,24 +10,19 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 pub struct WsSocketTransport {
     /// Для принятия сообщения внешними системами(out_msg)
-    pub outside_receiver: Receiver<String>,
     sender: Sender<String>,
 
     /// Для отправки сообщения внешними системами(in_msg)
-    pub outside_sender: Sender<String>,
     receiver: Arc<Mutex<Receiver<String>>>,
 
     clients: Arc<Mutex<HashMap<String, Client>>>,
 }
 
 impl WsSocketTransport {
-    pub fn new(outside_sender: Sender<String>, outside_receiver: Receiver<String>) -> Arc<Self> {
-        let (sender, receiver) = tokio::sync::mpsc::channel::<String>(1000);
+    pub fn new(outside_receiver: Receiver<String>, outside_sender: Sender<String>) -> Arc<Self> {
         Arc::new(Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            sender,
-            outside_receiver: receiver,
-            outside_sender,
+            sender: outside_sender,
             receiver: Arc::new(Mutex::new(outside_receiver)),
         })
     }
@@ -148,6 +143,7 @@ impl WsSocketTransport {
                             .expect("Cant send message to client")
                     });
 
+                    // Считываем сообщения из ws и отправляем в kafka
                     while let Some(message) = outside_reader.recv().await {
                         let _ = this.sender.send(message).await;
                     }
