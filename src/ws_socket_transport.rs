@@ -8,11 +8,12 @@ use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+#[allow(dead_code)]
 pub struct WsSocketTransport {
-    /// Для принятия сообщения внешними системами(out_msg)
+    /// Для отправки сообщений во внешние системы (out_msg)
     sender: Sender<String>,
 
-    /// Для отправки сообщения внешними системами(in_msg)
+    /// Для отправки сообщения внешними системами в ws (in_msg)
     receiver: Arc<Mutex<Receiver<String>>>,
 
     clients: Arc<Mutex<HashMap<String, Client>>>,
@@ -56,7 +57,7 @@ impl WsSocketTransport {
                     info!("Received message {}", &text_as_string);
                     sender.send(text_as_string).await?;
                 }
-                Message::Binary(bytes) => {
+                Message::Binary(_) => {
                     info!("Received binary message");
                 }
                 Message::Ping(_) => {
