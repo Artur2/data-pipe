@@ -12,34 +12,19 @@ use tokio::sync::broadcast::{Receiver, Sender};
 #[allow(dead_code)]
 pub struct WsSocketTransport {
     clients: Arc<RwLock<HashMap<String, Client>>>,
-    sender_receiver_out: (Sender<String>, Receiver<String>),
-    sender_receiver_in: (Sender<String>, Receiver<String>),
+    sender_out: Sender<String>,
+    sender_in: Sender<String>,
 }
 
 impl WsSocketTransport {
     pub fn new() -> Arc<Self> {
-        let (sender_out, receiver_out) = tokio::sync::broadcast::channel::<String>(1000);
-        let (sender_in, receiver_in) = tokio::sync::broadcast::channel::<String>(1000); // TODO: Заменить на клиентский send/recv
-
-        let mut receiver_out_clone = sender_out.subscribe();
-        let mut receiver_in_clone = sender_in.subscribe();
-
-        tokio::task::spawn(async move {
-            while let Ok(message) = receiver_out_clone.recv().await {
-                println!("{}", message);
-            }
-        });
-
-        tokio::task::spawn(async move {
-            while let Ok(message) = receiver_in_clone.recv().await {
-                println!("{}", message);
-            }
-        });
+        let (sender_out, _) = tokio::sync::broadcast::channel::<String>(1000);
+        let (sender_in, _) = tokio::sync::broadcast::channel::<String>(1000);
 
         Arc::new(Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
-            sender_receiver_out: (sender_out, receiver_out),
-            sender_receiver_in: (sender_in, receiver_in),
+            sender_out,
+            sender_in,
         })
     }
 
@@ -50,11 +35,12 @@ impl WsSocketTransport {
     }
 
     pub fn get_receiver(self: Arc<Self>) -> DataPipeResult<Receiver<String>> {
-        Ok(self.sender_receiver_out.0.subscribe())
+        Ok(self.sender_out.subscribe())
     }
 
+    // TODO: Возвращать клиентские отправители, а не общий для ws_socket_transport
     pub fn get_sender(self: Arc<Self>) -> DataPipeResult<Sender<String>> {
-        Ok(self.sender_receiver_in.0.clone())
+        Ok(self.sender_in.clone())
     }
 
     async fn bind_and_handle(self: Arc<Self>) -> DataPipeResult<()> {
@@ -128,37 +114,39 @@ impl WsSocketTransport {
         let server = WebSocketServer::<Http1>::new(Config::default());
         server
             .serve(listener, move |ws, req| {
-                let (reader, writer) = ws.split();
                 let client_id = utils::get_parameter_from_query(&req.path, "clientId");
                 let this = Arc::clone(&self);
                 async move {
-                    let mut clients_guard = this.clients.write().await;
-                    if clients_guard.contains_key(&client_id) {
-                        warn!("Client with same id already exists");
-                        return;
-                    } else {
-                        let client = Client::new(client_id.clone());
-                        (clients_guard).insert(client_id.clone(), client);
-
-                        let receiver_self = Arc::clone(&this);
-                        let writer_self = Arc::clone(&this);
-
-                        let client_id_reader = client_id.clone();
-                        let client_id_writer = client_id.clone();
-
-                        tokio::spawn(async move {
-                            let receiver = receiver_self.sender_receiver_in.0.subscribe();
-                            receiver_self
-                                .web_socket_writer(receiver, writer, &client_id_writer)
-                                .await
-                        });
-                        tokio::spawn(async move {
-                            let sender = writer_self.sender_receiver_out.0.clone();
-                            writer_self
-                                .web_socket_reader(sender, reader, &client_id_reader)
-                                .await
-                        });
+                    {
+                        let mut clients_guard = this.clients.write().await;
+                        if clients_guard.contains_key(&client_id) {
+                            warn!("Client with same id already exists");
+                            return;
+                        } else {
+                            let client = Client::new(client_id.clone());
+                            (clients_guard).insert(client_id.clone(), client);
+                        }
                     }
+
+                    let receiver_self = Arc::clone(&this);
+                    let writer_self = Arc::clone(&this);
+
+                    let client_id_reader = client_id.clone();
+                    let client_id_writer = client_id.clone();
+
+                    let (reader, writer) = ws.split();
+                    tokio::spawn(async move {
+                        let receiver = receiver_self.sender_in.subscribe();
+                        receiver_self
+                            .web_socket_writer(receiver, writer, &client_id_writer)
+                            .await
+                    });
+                    tokio::spawn(async move {
+                        let sender = writer_self.sender_out.clone();
+                        writer_self
+                            .web_socket_reader(sender, reader, &client_id_reader)
+                            .await
+                    });
                 }
             })
             .await
