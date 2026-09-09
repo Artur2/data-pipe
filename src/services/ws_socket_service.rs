@@ -35,7 +35,7 @@ impl WsSocketService {
         Ok(self.sender_out.subscribe())
     }
 
-    pub async fn get_receiver_by_client_identifier(
+    async fn get_receiver_by_client_identifier(
         self: Arc<Self>,
         identifier: &String,
     ) -> DataPipeResult<Receiver<String>> {
@@ -68,12 +68,15 @@ impl WsSocketService {
         while let Some(Ok(msg)) = reader.next().await {
             match msg {
                 Message::Text(text) => {
+                    // TODO: Add message type, not as raw string
                     let text_as_string =
                         String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown)?;
-                    info!("Received message {}", &text_as_string);
-                    sender
-                        .send(text_as_string)
-                        .map_err(|_| DataPipeError::ReceiveMessageFailed)?;
+
+                    if sender.receiver_count() > 0 {
+                        sender
+                            .send(text_as_string)
+                            .map_err(|_| DataPipeError::ReceiveMessageFailed)?;
+                    }
                 }
                 Message::Binary(_) => {
                     info!("Received binary message");
@@ -116,17 +119,19 @@ impl WsSocketService {
     }
 
     async fn handle_connection(self: Arc<Self>, listener: TcpListener) -> DataPipeResult<()> {
+        info!("Start listening");
         let server = WebSocketServer::<Http1>::new(Config::default());
         server
             .serve(listener, move |ws, req| {
                 let client_id = utils::get_parameter_from_query(&req.path, "clientId");
                 let this = Arc::clone(&self);
+                info!("Connecting client with id {}", client_id);
 
                 async move {
                     {
                         let clients_guard = this.clients.write().await;
                         if clients_guard.contains_key(&client_id) {
-                            warn!("Client with same id already exists");
+                            warn!("Client with same id already exists, closing connection");
                             return;
                         }
                     }
@@ -134,7 +139,7 @@ impl WsSocketService {
                     {
                         let mut clients = this.clients.write().await;
                         if clients.contains_key(&client_id) {
-                            warn!("Client with same id already added");
+                            warn!("Client with same id already added, closing connection");
                             return;
                         }
 
@@ -149,7 +154,7 @@ impl WsSocketService {
                     let client_id_writer = client_id.clone();
 
                     let (reader, writer) = ws.split();
-                    tokio::spawn(async move {
+                    tokio::task::spawn(async move {
                         let self_reference = writer_self.clone();
                         let client_receiver = self_reference
                             .get_receiver_by_client_identifier(&client_id_writer)
@@ -163,7 +168,7 @@ impl WsSocketService {
                             .web_socket_writer(client_receiver.unwrap(), writer, &client_id_writer)
                             .await
                     });
-                    tokio::spawn(async move {
+                    tokio::task::spawn(async move {
                         let sender = receiver_self.sender_out.clone();
                         receiver_self
                             .web_socket_reader(sender, reader, &client_id_reader)
@@ -173,6 +178,8 @@ impl WsSocketService {
             })
             .await
             .map_err(|e| DataPipeError::TaskError(e.to_string()))?;
+
+        info!("Listener exited");
 
         Ok(())
     }

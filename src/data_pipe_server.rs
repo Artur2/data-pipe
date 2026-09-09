@@ -1,4 +1,5 @@
 use crate::data::client::Client;
+use crate::data::error::DataPipeResult;
 use crate::services::ws_socket_service::WsSocketService;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,5 +19,11 @@ impl DataPipeServer {
             ws_socket_service,
             clients,
         }
+    }
+
+    pub async fn initialize(&self) -> DataPipeResult<()> {
+        let ws_service = self.ws_socket_service.clone();
+        ws_service.initialize().await?;
+        Ok(())
     }
 }
