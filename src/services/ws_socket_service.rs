@@ -123,11 +123,20 @@ impl WsSocketService {
         let server = WebSocketServer::<Http1>::new(Config::default());
         server
             .serve(listener, move |ws, req| {
-                let client_id = utils::get_parameter_from_query(&req.path, "clientId");
                 let this = Arc::clone(&self);
-                info!("Connecting client with id {}", client_id);
-
+                
                 async move {
+                    let client_id_result = utils::get_parameter_from_query(&req.path, "clientId");
+
+                    if client_id_result.is_err() {
+                        warn!("Cant parse client id, {:?}", client_id_result);
+                        return;
+                    }
+
+                    let client_id = client_id_result.unwrap();
+
+                    info!("Connecting client with id {}", client_id);
+
                     {
                         let clients_guard = this.clients.write().await;
                         if clients_guard.contains_key(&client_id) {

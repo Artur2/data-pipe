@@ -1,4 +1,7 @@
-pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> String {
+use crate::data::error::DataPipeError::ClientIdentificationError;
+use crate::data::error::DataPipeResult;
+
+pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPipeResult<String> {
     use regex::Regex;
     let regex = Regex::new(r"[?&]([^=#]+)=([^&#]*)").unwrap();
 
@@ -6,14 +9,12 @@ pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> String 
         if let Some(cap) = caps.get(1) {
             if cap.as_str() == name_of_parameter {
                 if let Some(id) = caps.get(2) {
-                    return id.as_str().to_owned();
+                    return Ok(id.as_str().to_owned());
                 }
             }
         }
     }
 
-    panic!(
-        "Cant get parameter {} from query {} ",
-        name_of_parameter, query
-    );
+    let error = format!("Parameter '{}' not found", name_of_parameter);
+    Err(ClientIdentificationError(error))
 }

@@ -16,6 +16,8 @@ pub enum DataPipeError {
     CantConnect,
     #[error("Task execution error: {0}")]
     TaskError(String),
+    #[error("Cant identify client: {0}")]
+    ClientIdentificationError(String),
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;
