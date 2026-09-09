@@ -1,6 +1,6 @@
-use crate::client::Client;
-use crate::error::{DataPipeError, DataPipeResult};
-use crate::utils;
+use crate::common::utils;
+use crate::data::client::Client;
+use crate::data::error::{DataPipeError, DataPipeResult};
 use log::{info, warn};
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
 use std::collections::HashMap;
@@ -10,21 +10,18 @@ use tokio::sync::RwLock;
 use tokio::sync::broadcast::{Receiver, Sender};
 
 #[allow(dead_code)]
-pub struct WsSocketTransport {
+pub struct WsSocketService {
     clients: Arc<RwLock<HashMap<String, Client>>>,
     sender_out: Sender<String>,
-    sender_in: Sender<String>,
 }
 
-impl WsSocketTransport {
-    pub fn new() -> Arc<Self> {
+impl WsSocketService {
+    pub fn new(clients: Arc<RwLock<HashMap<String, Client>>>) -> Arc<Self> {
         let (sender_out, _) = tokio::sync::broadcast::channel::<String>(1000);
-        let (sender_in, _) = tokio::sync::broadcast::channel::<String>(1000);
 
         Arc::new(Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
+            clients,
             sender_out,
-            sender_in,
         })
     }
 
@@ -38,9 +35,17 @@ impl WsSocketTransport {
         Ok(self.sender_out.subscribe())
     }
 
-    // TODO: Возвращать клиентские отправители, а не общий для ws_socket_transport
-    pub fn get_sender(self: Arc<Self>) -> DataPipeResult<Sender<String>> {
-        Ok(self.sender_in.clone())
+    pub async fn get_receiver_by_client_identifier(
+        self: Arc<Self>,
+        identifier: &String,
+    ) -> DataPipeResult<Receiver<String>> {
+        let clients = self.clients.read().await;
+        if !clients.contains_key(identifier) {
+            return Err(DataPipeError::Unknown);
+        }
+
+        let value = clients.get(identifier);
+        Ok(value.unwrap().sender.subscribe())
     }
 
     async fn bind_and_handle(self: Arc<Self>) -> DataPipeResult<()> {
@@ -116,16 +121,25 @@ impl WsSocketTransport {
             .serve(listener, move |ws, req| {
                 let client_id = utils::get_parameter_from_query(&req.path, "clientId");
                 let this = Arc::clone(&self);
+
                 async move {
                     {
-                        let mut clients_guard = this.clients.write().await;
+                        let clients_guard = this.clients.write().await;
                         if clients_guard.contains_key(&client_id) {
                             warn!("Client with same id already exists");
                             return;
-                        } else {
-                            let client = Client::new(client_id.clone());
-                            (clients_guard).insert(client_id.clone(), client);
                         }
+                    }
+
+                    {
+                        let mut clients = this.clients.write().await;
+                        if clients.contains_key(&client_id) {
+                            warn!("Client with same id already added");
+                            return;
+                        }
+
+                        let client = Client::new(client_id.clone());
+                        clients.insert(client_id.clone(), client);
                     }
 
                     let receiver_self = Arc::clone(&this);
@@ -136,14 +150,22 @@ impl WsSocketTransport {
 
                     let (reader, writer) = ws.split();
                     tokio::spawn(async move {
-                        let receiver = receiver_self.sender_in.subscribe();
-                        receiver_self
-                            .web_socket_writer(receiver, writer, &client_id_writer)
+                        let self_reference = writer_self.clone();
+                        let client_receiver = self_reference
+                            .get_receiver_by_client_identifier(&client_id_writer)
+                            .await;
+
+                        if client_receiver.is_err() {
+                            panic!("Client is not registered");
+                        }
+
+                        writer_self
+                            .web_socket_writer(client_receiver.unwrap(), writer, &client_id_writer)
                             .await
                     });
                     tokio::spawn(async move {
-                        let sender = writer_self.sender_out.clone();
-                        writer_self
+                        let sender = receiver_self.sender_out.clone();
+                        receiver_self
                             .web_socket_reader(sender, reader, &client_id_reader)
                             .await
                     });
