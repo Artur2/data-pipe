@@ -1,4 +1,4 @@
-use crate::data::error::DataPipeResult;
+use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data_pipe_server::DataPipeServer;
 use log::LevelFilter;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
@@ -19,6 +19,18 @@ async fn main() -> DataPipeResult<()> {
 
     let data_pipe_server = DataPipeServer::new();
     data_pipe_server.initialize().await?;
+
+    loop {
+        let mut input = String::default();
+
+        std::io::stdin()
+            .read_line(&mut input)
+            .map_err(|_| DataPipeError::Unknown)?;
+
+        if input.trim() == "c" {
+            break;
+        }
+    }
 
     Ok(())
 }

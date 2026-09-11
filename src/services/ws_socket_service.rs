@@ -1,6 +1,7 @@
 use crate::common::utils;
 use crate::data::client::Client;
 use crate::data::error::{DataPipeError, DataPipeResult};
+use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use log::{info, warn};
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
 use std::collections::HashMap;
@@ -12,12 +13,12 @@ use tokio::sync::broadcast::{Receiver, Sender};
 #[allow(dead_code)]
 pub struct WsSocketService {
     clients: Arc<RwLock<HashMap<String, Client>>>,
-    sender_out: Sender<String>,
+    sender_out: Sender<DataPipeMessage>,
 }
 
 impl WsSocketService {
     pub fn new(clients: Arc<RwLock<HashMap<String, Client>>>) -> Arc<Self> {
-        let (sender_out, _) = tokio::sync::broadcast::channel::<String>(1000);
+        let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(1000);
 
         Arc::new(Self {
             clients,
@@ -26,19 +27,19 @@ impl WsSocketService {
     }
 
     pub async fn initialize(self: Arc<Self>) -> DataPipeResult<()> {
-        tokio::spawn(self.bind_and_handle())
-            .await
-            .map_err(|e| DataPipeError::TaskError(e.to_string()))?
+        tokio::spawn(self.bind_and_handle());
+
+        Ok(())
     }
 
-    pub fn get_receiver(self: Arc<Self>) -> DataPipeResult<Receiver<String>> {
+    pub fn get_receiver(self: Arc<Self>) -> DataPipeResult<Receiver<DataPipeMessage>> {
         Ok(self.sender_out.subscribe())
     }
 
     async fn get_receiver_by_client_identifier(
         self: Arc<Self>,
         identifier: &String,
-    ) -> DataPipeResult<Receiver<String>> {
+    ) -> DataPipeResult<Receiver<DataPipeMessage>> {
         let clients = self.clients.read().await;
         if !clients.contains_key(identifier) {
             return Err(DataPipeError::Unknown);
@@ -61,21 +62,37 @@ impl WsSocketService {
     /// Пишет в sender из WS
     async fn web_socket_reader(
         self: Arc<Self>,
-        sender: Sender<String>,
+        sender: Sender<DataPipeMessage>,
         mut reader: SplitReader<Stream<Http1>>,
         client_id: &str,
     ) -> DataPipeResult<()> {
         while let Some(Ok(msg)) = reader.next().await {
             match msg {
                 Message::Text(text) => {
-                    // TODO: Add message type, not as raw string
                     let text_as_string =
-                        String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown)?;
+                        String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown);
+
+                    if text_as_string.is_err() {
+                        warn!("Can't parse text from websocket message");
+                        continue;
+                    }
 
                     if sender.receiver_count() > 0 {
-                        sender
-                            .send(text_as_string)
-                            .map_err(|_| DataPipeError::ReceiveMessageFailed)?;
+                        let message =
+                            serde_json::from_str::<DataPipeMessage>(&text_as_string.unwrap());
+                        if message.is_err() {
+                            warn!("Can't parse message from websocket message");
+                            continue;
+                        }
+
+                        let send_result = sender.send(message.unwrap());
+                        if send_result.is_err() {
+                            warn!("Can't send message to websocket");
+                            continue;
+                        }
+                    } else {
+                        warn!("Can't send message to receivers");
+                        continue;
                     }
                 }
                 Message::Binary(_) => {
@@ -103,14 +120,16 @@ impl WsSocketService {
     /// Пишет из receiver в ws
     async fn web_socket_writer(
         self: Arc<Self>,
-        mut rx: Receiver<String>,
+        mut rx: Receiver<DataPipeMessage>,
         mut ws_writer: SplitWriter<Stream<Http1>>,
         client_id: &str,
     ) -> DataPipeResult<()> {
         // receive message from outside and write it to ws
         while let Ok(msg) = rx.recv().await {
+            let message = serde_json::to_string(&msg).unwrap();
+
             ws_writer
-                .send(Message::from(msg))
+                .send(Message::from(message))
                 .await
                 .map_err(|_| DataPipeError::SendMessageFailed)?;
         }
@@ -124,7 +143,7 @@ impl WsSocketService {
         server
             .serve(listener, move |ws, req| {
                 let this = Arc::clone(&self);
-                
+
                 async move {
                     let client_id_result = utils::get_parameter_from_query(&req.path, "clientId");
 
