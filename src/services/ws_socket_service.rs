@@ -171,7 +171,7 @@ impl WsSocketService {
                     let client_id_result = utils::get_parameter_from_query(&req.path, "clientId");
 
                     if client_id_result.is_err() {
-                        warn!("Cant parse client id, {:?}", client_id_result);
+                        warn!("Cant parse client id, {}", client_id_result.err().unwrap());
                         return;
                     }
 
