@@ -137,6 +137,29 @@ impl WsSocketService {
         Ok(())
     }
 
+    async fn register_client(self: Arc<Self>, client_id: &str) -> DataPipeResult<()> {
+        {
+            let clients_guard = self.clients.write().await;
+            if clients_guard.contains_key(client_id) {
+                warn!("Client with same id already exists, closing connection");
+                return Err(DataPipeError::ClientAlreadyExist);
+            }
+        }
+
+        {
+            let mut clients = self.clients.write().await;
+            if clients.contains_key(client_id) {
+                warn!("Client with same id already added, closing connection");
+                return Err(DataPipeError::ClientAlreadyExist);
+            }
+
+            let client = Client::new(client_id.to_string().clone());
+            clients.insert(client_id.to_string().clone(), client);
+        }
+
+        Ok(())
+    }
+
     async fn handle_connection(self: Arc<Self>, listener: TcpListener) -> DataPipeResult<()> {
         info!("Start listening");
         let server = WebSocketServer::<Http1>::new(Config::default());
@@ -156,27 +179,19 @@ impl WsSocketService {
 
                     info!("Connecting client with id {}", client_id);
 
-                    {
-                        let clients_guard = this.clients.write().await;
-                        if clients_guard.contains_key(&client_id) {
-                            warn!("Client with same id already exists, closing connection");
-                            return;
-                        }
-                    }
-
-                    {
-                        let mut clients = this.clients.write().await;
-                        if clients.contains_key(&client_id) {
-                            warn!("Client with same id already added, closing connection");
-                            return;
-                        }
-
-                        let client = Client::new(client_id.clone());
-                        clients.insert(client_id.clone(), client);
-                    }
-
                     let receiver_self = Arc::clone(&this);
                     let writer_self = Arc::clone(&this);
+                    let client_registration_self = Arc::clone(&this);
+
+                    let result = client_registration_self.register_client(&client_id).await;
+                    if result.is_err() {
+                        warn!(
+                            "Can't register client with id {}, error: {}",
+                            client_id,
+                            result.err().unwrap()
+                        );
+                        return;
+                    }
 
                     let client_id_reader = client_id.clone();
                     let client_id_writer = client_id.clone();
