@@ -1,5 +1,5 @@
-use std::fmt::Formatter;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
+use std::fmt::{Formatter};
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DataPipeMessage {
@@ -11,6 +11,11 @@ pub struct DataPipeMessage {
 
 impl std::fmt::Display for DataPipeMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Message from {}", self.client_identifier)
+        let topic = self.topic.clone().unwrap_or_else(|| "-".to_string());
+        write!(
+            f,
+            "Message from {}, type {}, topic {}",
+            self.client_identifier, self.message_type, topic
+        )
     }
 }
