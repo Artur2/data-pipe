@@ -1,16 +1,15 @@
-use crate::data::client::Client;
-use std::collections::HashMap;
+use crate::data::clients_manager::ClientsManager;
+use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast::Receiver;
-use crate::data::messaging::data_pipe_message::DataPipeMessage;
 
 pub struct EchoService {
-    clients: Arc<RwLock<HashMap<String, Client>>>,
+    clients: Arc<RwLock<ClientsManager>>,
 }
 
 impl EchoService {
-    pub fn new(clients: Arc<RwLock<HashMap<String, Client>>>) -> EchoService {
+    pub fn new(clients: Arc<RwLock<ClientsManager>>) -> EchoService {
         EchoService { clients }
     }
 

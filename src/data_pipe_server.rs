@@ -5,16 +5,17 @@ use crate::services::ws_socket_service::WsSocketService;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use crate::data::clients_manager::ClientsManager;
 
 pub struct DataPipeServer {
-    clients: Arc<RwLock<HashMap<String, Client>>>,
+    clients: Arc<RwLock<ClientsManager>>,
     ws_socket_service: Arc<WsSocketService>,
     echo_service: EchoService,
 }
 
 impl DataPipeServer {
     pub fn new() -> DataPipeServer {
-        let clients = Arc::new(RwLock::new(HashMap::new()));
+        let clients = Arc::new(RwLock::new(ClientsManager::new()));
         let ws_socket_service = WsSocketService::new(clients.clone());
         let echo_service = EchoService::new(clients.clone());
         DataPipeServer {

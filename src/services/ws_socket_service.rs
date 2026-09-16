@@ -1,10 +1,10 @@
 use crate::common::utils;
 use crate::data::client::Client;
+use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use log::{info, warn};
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -12,12 +12,12 @@ use tokio::sync::broadcast::{Receiver, Sender};
 
 #[allow(dead_code)]
 pub struct WsSocketService {
-    clients: Arc<RwLock<HashMap<String, Client>>>,
+    clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
 }
 
 impl WsSocketService {
-    pub fn new(clients: Arc<RwLock<HashMap<String, Client>>>) -> Arc<Self> {
+    pub fn new(clients: Arc<RwLock<ClientsManager>>) -> Arc<Self> {
         let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(1000);
 
         Arc::new(Self {
@@ -41,7 +41,7 @@ impl WsSocketService {
         identifier: &String,
     ) -> DataPipeResult<Receiver<DataPipeMessage>> {
         let clients = self.clients.read().await;
-        if !clients.contains_key(identifier) {
+        if !clients.contains(identifier) {
             return Err(DataPipeError::Unknown);
         }
 
@@ -107,7 +107,7 @@ impl WsSocketService {
                 Message::Close(_) => {
                     info!("Removing client {} on close", client_id);
                     let mut clients = self.clients.write().await;
-                    if clients.contains_key(client_id) {
+                    if clients.contains(client_id) {
                         clients.remove(client_id);
                     }
                 }
@@ -140,7 +140,7 @@ impl WsSocketService {
     async fn register_client(self: Arc<Self>, client_id: &str) -> DataPipeResult<()> {
         {
             let clients_guard = self.clients.write().await;
-            if clients_guard.contains_key(client_id) {
+            if clients_guard.contains(client_id) {
                 warn!("Client with same id already exists, closing connection");
                 return Err(DataPipeError::ClientAlreadyExist);
             }
@@ -148,13 +148,13 @@ impl WsSocketService {
 
         {
             let mut clients = self.clients.write().await;
-            if clients.contains_key(client_id) {
+            if clients.contains(client_id) {
                 warn!("Client with same id already added, closing connection");
                 return Err(DataPipeError::ClientAlreadyExist);
             }
 
             let client = Client::new(client_id.to_string().clone());
-            clients.insert(client_id.to_string().clone(), client);
+            clients.add(client_id, client);
         }
 
         Ok(())
