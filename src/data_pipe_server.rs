@@ -1,11 +1,9 @@
-use crate::data::client::Client;
+use crate::data::clients_manager::ClientsManager;
 use crate::data::error::DataPipeResult;
 use crate::services::echo_service::EchoService;
 use crate::services::ws_socket_service::WsSocketService;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::data::clients_manager::ClientsManager;
 
 pub struct DataPipeServer {
     clients: Arc<RwLock<ClientsManager>>,
