@@ -139,23 +139,16 @@ impl WsSocketService {
 
     async fn register_client(self: Arc<Self>, client_id: &str) -> DataPipeResult<()> {
         {
-            let clients_guard = self.clients.write().await;
+            let clients_guard = self.clients.read().await;
             if clients_guard.contains(client_id) {
                 warn!("Client with same id already exists, closing connection");
                 return Err(DataPipeError::ClientAlreadyExist);
             }
         }
 
-        {
-            let mut clients = self.clients.write().await;
-            if clients.contains(client_id) {
-                warn!("Client with same id already added, closing connection");
-                return Err(DataPipeError::ClientAlreadyExist);
-            }
-
-            let client = Client::new(client_id.to_string().clone());
-            clients.add(client_id, client);
-        }
+        let mut clients = self.clients.write().await;
+        let client = Client::new(client_id.to_string().clone());
+        clients.add(client_id, client);
 
         Ok(())
     }

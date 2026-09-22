@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use crate::data::client::Client;
+use std::collections::HashMap;
 
 pub struct ClientsManager {
-    pub clients: HashMap<String, Client>,
+    clients: HashMap<String, Client>,
 }
 
 impl ClientsManager {
@@ -26,5 +26,21 @@ impl ClientsManager {
 
     pub fn remove(&mut self, identifier: &str) -> Option<Client> {
         self.clients.remove(identifier)
+    }
+
+    pub fn len(&self) -> usize {
+        self.clients.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.clients.is_empty()
+    }
+
+    pub fn get_by_index(&self, index: usize) -> Option<&Client> {
+        if let Some((_, value)) = self.clients.iter().nth(index) {
+            Some(value)
+        } else {
+            None
+        }
     }
 }

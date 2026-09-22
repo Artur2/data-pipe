@@ -9,6 +9,17 @@ pub struct DataPipeMessage {
     pub topic: Option<String>,
 }
 
+impl DataPipeMessage {
+    pub fn new(client_identifier: String, message_type: DataPipeMessageType, data: Vec<u8>, topic: Option<String>) -> Self {
+        DataPipeMessage {
+            client_identifier,
+            message_type,
+            data,
+            topic
+        }
+    }
+}
+
 impl std::fmt::Display for DataPipeMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let topic = self.topic.clone().unwrap_or_else(|| "-".to_string());

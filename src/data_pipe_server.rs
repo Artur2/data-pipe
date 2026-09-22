@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 pub struct DataPipeServer {
     clients: Arc<RwLock<ClientsManager>>,
     ws_socket_service: Arc<WsSocketService>,
-    echo_service: EchoService,
+    echo_service: Arc<EchoService>,
 }
 
 impl DataPipeServer {
@@ -28,8 +28,9 @@ impl DataPipeServer {
         ws_service.initialize().await?;
 
         let ws_service_clone = self.ws_socket_service.clone();
+        let echo_service_clone = self.echo_service.clone();
         let receiver = ws_service_clone.get_receiver()?;
-        self.echo_service.initialize(receiver).await;
+        echo_service_clone.initialize(receiver).await;
 
         Ok(())
     }
