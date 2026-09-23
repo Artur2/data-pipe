@@ -1,21 +1,33 @@
+use crate::data::messaging::data_pipe_message_header::DataPipeMessageHeader;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
-use std::fmt::{Formatter};
+use std::fmt::Formatter;
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DataPipeMessage {
     pub client_identifier: String,
+    pub message_identifier: String,
+    pub headers: Vec<DataPipeMessageHeader>,
     pub message_type: DataPipeMessageType,
     pub data: Vec<u8>,
     pub topic: Option<String>,
 }
 
 impl DataPipeMessage {
-    pub fn new(client_identifier: String, message_type: DataPipeMessageType, data: Vec<u8>, topic: Option<String>) -> Self {
+    pub fn new(
+        client_identifier: String,
+        message_identifier: String,
+        message_type: DataPipeMessageType,
+        data: Vec<u8>,
+        topic: Option<String>,
+        headers: Vec<DataPipeMessageHeader>,
+    ) -> Self {
         DataPipeMessage {
             client_identifier,
+            message_identifier,
             message_type,
             data,
-            topic
+            topic,
+            headers
         }
     }
 }

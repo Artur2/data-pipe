@@ -1,5 +1,8 @@
 use crate::data::error::DataPipeError::ClientIdentificationError;
 use crate::data::error::DataPipeResult;
+use crate::data::messaging::data_pipe_message::DataPipeMessage;
+use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
+use rand::{Rng, rng};
 use std::sync::LazyLock;
 
 pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPipeResult<String> {
@@ -24,4 +27,20 @@ pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPip
 
     let error = format!("Parameter '{}' not found", name_of_parameter);
     Err(ClientIdentificationError(error))
+}
+
+pub fn create_random_message(client_identifier: String) -> DataPipeMessage {
+    let mut data = [0u8; 500];
+    rand::fill(&mut data);
+    
+    let uuid_raw = uuid::Uuid::new_v4();
+
+    DataPipeMessage::new(
+        client_identifier,
+        uuid_raw.to_string(),
+        DataPipeMessageType::Default,
+        data.to_vec(),
+        None,
+        vec![],
+    )
 }

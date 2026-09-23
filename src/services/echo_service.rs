@@ -1,6 +1,6 @@
+use crate::common::utils::create_random_message;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
-use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
 use log::warn;
 use rand::random_range;
 use std::sync::Arc;
@@ -42,14 +42,8 @@ impl EchoService {
                     warn!("No random client found")
                 }
                 Some(client) => {
-                    let mut data = [0u8; 500];
-                    rand::fill(&mut data);
-                    let _ = client.sender.send(DataPipeMessage::new(
-                        client.identifier.clone(),
-                        DataPipeMessageType::Default,
-                        data.to_vec(),
-                        None,
-                    ));
+                    let message = create_random_message(client.identifier.clone());
+                    let _ = client.sender.send(message);
                 }
             };
         }
