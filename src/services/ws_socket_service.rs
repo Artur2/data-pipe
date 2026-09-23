@@ -1,4 +1,5 @@
 use crate::common::utils;
+use crate::configuration::Configuration;
 use crate::data::client::Client;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
@@ -12,17 +13,24 @@ use tokio::sync::broadcast::{Receiver, Sender};
 
 #[allow(dead_code)]
 pub struct WsSocketService {
+    configuration: Arc<Configuration>,
     clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
 }
 
 impl WsSocketService {
-    pub fn new(clients: Arc<RwLock<ClientsManager>>) -> Arc<Self> {
-        let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(1000);
+    pub fn new(
+        clients: Arc<RwLock<ClientsManager>>,
+        configuration: Arc<Configuration>,
+    ) -> Arc<Self> {
+        let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(
+            configuration.ws_outbound_channel_capacity,
+        );
 
         Arc::new(Self {
             clients,
             sender_out,
+            configuration,
         })
     }
 
@@ -147,7 +155,10 @@ impl WsSocketService {
         }
 
         let mut clients = self.clients.write().await;
-        let client = Client::new(client_id.to_string().clone());
+        let client = Client::new(
+            client_id.to_string().clone(),
+            self.configuration.ws_inbound_channel_capacity,
+        );
         clients.add(client_id, client);
 
         Ok(())

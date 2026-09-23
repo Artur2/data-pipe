@@ -1,3 +1,4 @@
+use crate::configuration::Configuration;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::DataPipeResult;
 use crate::services::echo_service::EchoService;
@@ -6,20 +7,23 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct DataPipeServer {
+    configuration: Arc<Configuration>,
     clients: Arc<RwLock<ClientsManager>>,
     ws_socket_service: Arc<WsSocketService>,
     echo_service: Arc<EchoService>,
 }
 
 impl DataPipeServer {
-    pub fn new() -> DataPipeServer {
+    pub fn new(configuration: Configuration) -> DataPipeServer {
+        let configuration = Arc::new(configuration);
         let clients = Arc::new(RwLock::new(ClientsManager::new()));
-        let ws_socket_service = WsSocketService::new(clients.clone());
+        let ws_socket_service = WsSocketService::new(clients.clone(), configuration.clone());
         let echo_service = EchoService::new(clients.clone());
         DataPipeServer {
             ws_socket_service,
             clients,
             echo_service,
+            configuration
         }
     }
 

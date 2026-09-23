@@ -1,8 +1,11 @@
+use crate::configuration::Configuration;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data_pipe_server::DataPipeServer;
 use log::LevelFilter;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
+
 pub mod common;
+mod configuration;
 pub mod data;
 pub mod data_pipe_server;
 pub mod services;
@@ -17,7 +20,7 @@ async fn main() -> DataPipeResult<()> {
     )
     .unwrap();
 
-    let data_pipe_server = DataPipeServer::new();
+    let data_pipe_server = DataPipeServer::new(Configuration::default());
     data_pipe_server.initialize().await?;
 
     loop {

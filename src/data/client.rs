@@ -12,8 +12,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(identifier: String) -> Client {
-        let (sender, _) = broadcast::channel(1024);
+    pub fn new(identifier: String, sender_capacity: usize) -> Client {
+        let (sender, _) = broadcast::channel(sender_capacity);
         Client {
             identifier,
             sender,
