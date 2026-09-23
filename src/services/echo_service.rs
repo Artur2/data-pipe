@@ -1,7 +1,7 @@
 use crate::common::utils::create_random_message;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
-use log::warn;
+use log::{info, warn};
 use rand::random_range;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -19,7 +19,7 @@ impl EchoService {
     pub async fn initialize(self: Arc<Self>, mut receiver: Receiver<DataPipeMessage>) {
         tokio::spawn(async move {
             while let Ok(message) = receiver.recv().await {
-                println!("{}", message);
+                info!("{}", message);
             }
         });
 

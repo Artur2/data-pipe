@@ -58,7 +58,7 @@ impl WsSocketService {
     }
 
     async fn bind_and_handle(self: Arc<Self>) -> DataPipeResult<()> {
-        let listener = TcpListener::bind("127.0.0.1:7878")
+        let listener = TcpListener::bind(self.configuration.get_ws_binding_address())
             .await
             .map_err(|_| DataPipeError::CantBind)?;
 
