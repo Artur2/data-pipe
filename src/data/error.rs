@@ -18,6 +18,8 @@ pub enum DataPipeError {
     TaskError(String),
     #[error("Cant identify client: {0}")]
     ClientIdentificationError(String),
+    #[error("Cant parse message, message: {0}")]
+    CantParseMessage(String),
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;

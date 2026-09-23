@@ -85,22 +85,16 @@ impl WsSocketService {
                         continue;
                     }
 
-                    if sender.receiver_count() > 0 {
-                        let message =
-                            serde_json::from_str::<DataPipeMessage>(&text_as_string.unwrap());
-                        if message.is_err() {
-                            warn!("Can't parse message from websocket message");
+                    match self
+                        .clone()
+                        .try_receive_message(sender.clone(), text_as_string?)
+                        .await
+                    {
+                        Err(e) => {
+                            warn!("Can't receive message, reason {}", e);
                             continue;
                         }
-
-                        let send_result = sender.send(message.unwrap());
-                        if send_result.is_err() {
-                            warn!("Can't send message to websocket");
-                            continue;
-                        }
-                    } else {
-                        warn!("Can't send message to receivers");
-                        continue;
+                        _ => {}
                     }
                 }
                 Message::Binary(_) => {
@@ -140,6 +134,28 @@ impl WsSocketService {
                 .send(Message::from(message))
                 .await
                 .map_err(|_| DataPipeError::SendMessageFailed)?;
+        }
+
+        Ok(())
+    }
+
+    async fn try_receive_message(
+        self: Arc<Self>,
+        sender: Sender<DataPipeMessage>,
+        message: String,
+    ) -> DataPipeResult<()> {
+        if sender.receiver_count() > 0 {
+            let message_parse_result = serde_json::from_str::<DataPipeMessage>(&message);
+            if message_parse_result.is_err() {
+                return Err(DataPipeError::CantParseMessage(message));
+            }
+
+            let send_result = sender.send(message_parse_result.unwrap());
+            if send_result.is_err() {
+                return Err(DataPipeError::SendMessageFailed);
+            }
+        } else {
+            return Err(DataPipeError::ReceiveMessageFailed);
         }
 
         Ok(())
