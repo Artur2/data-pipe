@@ -12,13 +12,13 @@ use tokio::sync::RwLock;
 use tokio::sync::broadcast::{Receiver, Sender};
 
 #[allow(dead_code)]
-pub struct WsSocketService {
+pub struct WebSocketService {
     configuration: Arc<Configuration>,
     clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
 }
 
-impl WsSocketService {
+impl WebSocketService {
     pub fn new(
         clients: Arc<RwLock<ClientsManager>>,
         configuration: Arc<Configuration>,
