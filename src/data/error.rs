@@ -6,6 +6,8 @@ pub enum DataPipeError {
     Unknown,
     #[error("Client already exist")]
     ClientAlreadyExist,
+    #[error("Client not found")]
+    ClientNotFound,
     #[error("Receive message failed")]
     ReceiveMessageFailed,
     #[error("Send message failed")]

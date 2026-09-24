@@ -2,7 +2,6 @@ use crate::data::error::DataPipeError::ClientIdentificationError;
 use crate::data::error::DataPipeResult;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
-use rand::{Rng, rng};
 use std::sync::LazyLock;
 
 pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPipeResult<String> {

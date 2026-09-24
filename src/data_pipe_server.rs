@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 pub struct DataPipeServer {
     configuration: Arc<Configuration>,
     clients: Arc<RwLock<ClientsManager>>,
-    ws_socket_service: Arc<WebSocketService>,
+    web_socket_service: Arc<WebSocketService>,
     echo_service: Arc<EchoService>,
 }
 
@@ -17,21 +17,21 @@ impl DataPipeServer {
     pub fn new(configuration: Configuration) -> DataPipeServer {
         let configuration = Arc::new(configuration);
         let clients = Arc::new(RwLock::new(ClientsManager::new()));
-        let ws_socket_service = WebSocketService::new(clients.clone(), configuration.clone());
+        let web_socket_service = WebSocketService::new(clients.clone(), configuration.clone());
         let echo_service = EchoService::new(clients.clone());
         DataPipeServer {
-            ws_socket_service,
+            web_socket_service,
             clients,
             echo_service,
-            configuration
+            configuration,
         }
     }
 
     pub async fn initialize(&self) -> DataPipeResult<()> {
-        let ws_service = self.ws_socket_service.clone();
+        let ws_service = self.web_socket_service.clone();
         ws_service.initialize().await?;
 
-        let ws_service_clone = self.ws_socket_service.clone();
+        let ws_service_clone = self.web_socket_service.clone();
         let echo_service_clone = self.echo_service.clone();
         let receiver = ws_service_clone.get_receiver()?;
         echo_service_clone.initialize(receiver).await;

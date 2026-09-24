@@ -50,7 +50,7 @@ impl WebSocketService {
     ) -> DataPipeResult<Receiver<DataPipeMessage>> {
         let clients = self.clients.read().await;
         if !clients.contains(identifier) {
-            return Err(DataPipeError::Unknown);
+            return Err(DataPipeError::ClientNotFound);
         }
 
         let value = clients.get(identifier);
@@ -224,18 +224,19 @@ impl WebSocketService {
                             .await;
 
                         if client_receiver.is_err() {
-                            panic!("Client is not registered");
+                            warn!("Client is not registered");
+                            return;
                         }
 
-                        writer_self
+                        _ = writer_self
                             .web_socket_writer(client_receiver.unwrap(), writer, &client_id_writer)
-                            .await
+                            .await;
                     });
                     tokio::task::spawn(async move {
                         let sender = receiver_self.sender_out.clone();
-                        receiver_self
+                        _ = receiver_self
                             .web_socket_reader(sender, reader, &client_id_reader)
-                            .await
+                            .await;
                     });
                 }
             })
