@@ -175,9 +175,8 @@ impl WebSocketService {
             client_id.to_string().clone(),
             self.configuration.ws_inbound_channel_capacity,
         );
-        clients.add(client_id, client);
 
-        Ok(())
+        clients.add(client_id, client)
     }
 
     async fn handle_connection(self: Arc<Self>, listener: TcpListener) -> DataPipeResult<()> {

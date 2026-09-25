@@ -4,17 +4,21 @@ use std::fmt::Formatter;
 pub enum DataPipeMessageType {
     #[default]
     Default,
-    Subscription,
+    Subscribe,
+    Unsubscribe,
 }
 
 impl std::fmt::Display for DataPipeMessageType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DataPipeMessageType::Default => {
-                write!(f, "Default")
+                write!(f, "{0}", DataPipeMessageType::Default.to_string())
             }
-            DataPipeMessageType::Subscription => {
-                write!(f, "Subscription")
+            DataPipeMessageType::Subscribe => {
+                write!(f, "{0}", DataPipeMessageType::Subscribe.to_string())
+            }
+            DataPipeMessageType::Unsubscribe => {
+                write!(f, "{0}", DataPipeMessageType::Unsubscribe.to_string())
             }
         }
     }

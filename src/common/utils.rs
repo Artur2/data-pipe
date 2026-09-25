@@ -2,10 +2,10 @@ use crate::data::error::DataPipeError::ClientIdentificationError;
 use crate::data::error::DataPipeResult;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
+use regex::Regex;
 use std::sync::LazyLock;
 
 pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPipeResult<String> {
-    use regex::Regex;
     static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[?&]([^=#]+)=([^&#]*)").unwrap());
 
     for caps in REGEX.captures_iter(query) {
@@ -31,7 +31,7 @@ pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPip
 pub fn create_random_message(client_identifier: String) -> DataPipeMessage {
     let mut data = [0u8; 500];
     rand::fill(&mut data);
-    
+
     let uuid_raw = uuid::Uuid::new_v4();
 
     DataPipeMessage::new(

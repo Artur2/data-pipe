@@ -22,6 +22,8 @@ pub enum DataPipeError {
     ClientIdentificationError(String),
     #[error("Cant parse message, message: {0}")]
     CantParseMessage(String),
+    #[error("Subscription for topic {0} and group {1} already exists")]
+    SubscriptionAlreadyExist(String, String)
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;
