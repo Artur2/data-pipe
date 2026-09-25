@@ -5,10 +5,10 @@ use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use log::{info, warn};
+use parking_lot::RwLock;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::RwLock;
 use tokio::sync::broadcast::{Receiver, Sender};
 
 #[allow(dead_code)]
@@ -44,11 +44,11 @@ impl WebSocketService {
         Ok(self.sender_out.subscribe())
     }
 
-    async fn get_receiver_by_client_identifier(
+    fn get_receiver_by_client_identifier(
         self: Arc<Self>,
         identifier: &String,
     ) -> DataPipeResult<Receiver<DataPipeMessage>> {
-        let clients = self.clients.read().await;
+        let clients = self.clients.read();
         if !clients.contains(identifier) {
             return Err(DataPipeError::ClientNotFound);
         }
@@ -108,7 +108,7 @@ impl WebSocketService {
                 }
                 Message::Close(_) => {
                     info!("Removing client {} on close", client_id);
-                    let mut clients = self.clients.write().await;
+                    let mut clients = self.clients.write();
                     if clients.contains(client_id) {
                         clients.remove(client_id);
                     }
@@ -161,16 +161,16 @@ impl WebSocketService {
         Ok(())
     }
 
-    async fn register_client(self: Arc<Self>, client_id: &str) -> DataPipeResult<()> {
+    fn register_client(self: Arc<Self>, client_id: &str) -> DataPipeResult<()> {
         {
-            let clients_guard = self.clients.read().await;
+            let clients_guard = self.clients.read();
             if clients_guard.contains(client_id) {
                 warn!("Client with same id already exists, closing connection");
                 return Err(DataPipeError::ClientAlreadyExist);
             }
         }
 
-        let mut clients = self.clients.write().await;
+        let mut clients = self.clients.write();
         let client = Client::new(
             client_id.to_string().clone(),
             self.configuration.ws_inbound_channel_capacity,
@@ -202,7 +202,7 @@ impl WebSocketService {
                     let writer_self = Arc::clone(&this);
                     let client_registration_self = Arc::clone(&this);
 
-                    let result = client_registration_self.register_client(&client_id).await;
+                    let result = client_registration_self.register_client(&client_id);
                     if result.is_err() {
                         warn!(
                             "Can't register client with id {}, error: {}",
@@ -218,9 +218,8 @@ impl WebSocketService {
                     let (reader, writer) = ws.split();
                     tokio::task::spawn(async move {
                         let self_reference = writer_self.clone();
-                        let client_receiver = self_reference
-                            .get_receiver_by_client_identifier(&client_id_writer)
-                            .await;
+                        let client_receiver =
+                            self_reference.get_receiver_by_client_identifier(&client_id_writer);
 
                         if client_receiver.is_err() {
                             warn!("Client is not registered");

@@ -4,7 +4,7 @@ use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use log::{info, warn};
 use rand::random_range;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use parking_lot::RwLock;
 use tokio::sync::broadcast::Receiver;
 
 pub struct EchoService {
@@ -32,7 +32,7 @@ impl EchoService {
     }
 
     async fn write_random_message_to_client(&self) {
-        let clients_read = self.clients.read().await;
+        let clients_read = self.clients.read();
         if !clients_read.is_empty() {
             let len = clients_read.len();
             let random_index = if len > 1 { random_range(0..len - 1) } else { 0 };

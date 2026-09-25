@@ -4,7 +4,7 @@ use crate::data::error::DataPipeResult;
 use crate::services::echo_service::EchoService;
 use crate::services::web_socket_service::WebSocketService;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use parking_lot::RwLock;
 
 pub struct DataPipeServer {
     configuration: Arc<Configuration>,

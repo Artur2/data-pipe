@@ -15,3 +15,4 @@ serde = { version = "1.0.229", features = ["derive"] }
 rand = "0.10.2"
 uuid = { version = "1.26.1", features = ["v4"] }
 xxhash-rust = { version = "0.8.18", features = ["xxh32"] }
+parking_lot = "0.12.5"
