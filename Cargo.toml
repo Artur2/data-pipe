@@ -3,6 +3,13 @@ name = "data-pipe"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+strip = true  # Automatically strip symbols from the binary.
+lto = true
+opt-level = 2
+codegen-units = 1
+panic = "abort"
+
 [dependencies]
 sockudo-ws = { version = "2.0.1", features = ["full"] }
 tokio = "1.53.1"
@@ -16,3 +23,4 @@ rand = "0.10.2"
 uuid = { version = "1.26.1", features = ["v4"] }
 xxhash-rust = { version = "0.8.18", features = ["xxh32"] }
 parking_lot = "0.12.5"
+mimalloc = { version = "0.1.52" }

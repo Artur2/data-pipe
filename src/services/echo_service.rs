@@ -2,9 +2,9 @@ use crate::common::utils::create_random_message;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use log::{info, warn};
+use parking_lot::RwLock;
 use rand::random_range;
 use std::sync::Arc;
-use parking_lot::RwLock;
 use tokio::sync::broadcast::Receiver;
 
 pub struct EchoService {
@@ -25,13 +25,13 @@ impl EchoService {
 
         tokio::spawn(async move {
             loop {
-                self.write_random_message_to_client().await;
+                self.write_random_message_to_client();
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
         });
     }
 
-    async fn write_random_message_to_client(&self) {
+    fn write_random_message_to_client(&self) {
         let clients_read = self.clients.read();
         if !clients_read.is_empty() {
             let len = clients_read.len();

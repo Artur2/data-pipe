@@ -35,7 +35,7 @@ impl WebSocketService {
     }
 
     pub async fn initialize(self: Arc<Self>) -> DataPipeResult<()> {
-        tokio::spawn(self.bind_and_handle());
+        tokio::spawn(self.bind());
 
         Ok(())
     }
@@ -57,12 +57,12 @@ impl WebSocketService {
         Ok(value.unwrap().sender.subscribe())
     }
 
-    async fn bind_and_handle(self: Arc<Self>) -> DataPipeResult<()> {
+    async fn bind(self: Arc<Self>) -> DataPipeResult<()> {
         let listener = TcpListener::bind(self.configuration.get_ws_binding_address())
             .await
             .map_err(|_| DataPipeError::CantBind)?;
 
-        self.handle_connection(listener).await?;
+        self.serve_connection(listener).await?;
 
         Ok(())
     }
@@ -163,8 +163,8 @@ impl WebSocketService {
 
     fn register_client(self: Arc<Self>, client_id: &str) -> DataPipeResult<()> {
         {
-            let clients_guard = self.clients.read();
-            if clients_guard.contains(client_id) {
+            let clients = self.clients.read();
+            if clients.contains(client_id) {
                 warn!("Client with same id already exists, closing connection");
                 return Err(DataPipeError::ClientAlreadyExist);
             }
@@ -179,7 +179,7 @@ impl WebSocketService {
         clients.add(client_id, client)
     }
 
-    async fn handle_connection(self: Arc<Self>, listener: TcpListener) -> DataPipeResult<()> {
+    async fn serve_connection(self: Arc<Self>, listener: TcpListener) -> DataPipeResult<()> {
         info!("Start listening");
         let server = WebSocketServer::<Http1>::new(Config::default());
         server

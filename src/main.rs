@@ -2,7 +2,11 @@ use crate::configuration::Configuration;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data_pipe_server::DataPipeServer;
 use log::LevelFilter;
+use mimalloc::MiMalloc;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 pub mod common;
 mod configuration;
