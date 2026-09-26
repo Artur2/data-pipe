@@ -118,7 +118,7 @@ impl KafkaService {
                             "session.timeout.ms",
                             &cloned_self.configuration.kafka_session_timeout,
                         )
-                        .set("enable.auto.commit", "true")
+                        .set("enable.auto.commit", "false")
                         .create_with_context(context);
 
                     if consumer_result.is_err() {
