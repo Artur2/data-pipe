@@ -107,10 +107,16 @@ impl WebSocketService {
                     info!("Pong");
                 }
                 Message::Close(_) => {
-                    info!("Removing client {} on close", client_id);
-                    let mut clients = self.clients.write();
-                    if clients.contains(client_id) {
-                        clients.remove(client_id);
+                    info!("Cancelling client subscriptions {} on close", client_id);
+                    let clients = self.clients.write();
+                    let client = clients.get(client_id).unwrap();
+                    for subscription_info in &client.subscription_infos {
+                        let client_holder = clients.get_client_cancellation_holder(
+                            &subscription_info.topic,
+                            &subscription_info.group,
+                        );
+                        let token = &client_holder.unwrap().token;
+                        token.cancel();
                     }
                 }
             }

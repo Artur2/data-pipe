@@ -1,14 +1,16 @@
 use crate::data::client::Client;
+use crate::data::client_cancellation_holder::ClientCancellationHolder;
 use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use std::collections::HashMap;
+use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh32;
 
 // TODO: Management bus, for unsubscribe events
 pub struct ClientsManager {
     clients: HashMap<String, Client>,
     /// Key is hash of topic, group. Value is client identifier
-    lookup: HashMap<u32, String>,
+    lookup: HashMap<u32, ClientCancellationHolder>,
 }
 
 #[allow(dead_code)]
@@ -43,7 +45,10 @@ impl ClientsManager {
         }
 
         let client = self.clients.get_mut(identifier).unwrap();
-        self.lookup.insert(key, identifier.to_owned());
+        self.lookup.insert(
+            key,
+            ClientCancellationHolder::new(identifier.to_owned(), CancellationToken::new()),
+        );
 
         client.subscription_infos.push(client_subscription);
         Ok(())
@@ -74,6 +79,11 @@ impl ClientsManager {
         self.lookup.contains_key(&key)
     }
 
+    pub fn get_client_cancellation_holder(&self, topic: &str, group: &str) -> Option<&ClientCancellationHolder> {
+        let key = self.compute_hash(topic, group);
+        self.lookup.get(&key)
+    }
+
     pub fn contains(&self, identifier: &str) -> bool {
         self.clients.contains_key(identifier)
     }
@@ -83,7 +93,7 @@ impl ClientsManager {
     }
 
     pub fn remove(&mut self, identifier: &str) -> Option<Client> {
-        self.lookup.retain(|_, v| v != identifier);
+        self.lookup.retain(|_, v| v.identifier != identifier);
         self.clients.remove(identifier)
     }
 

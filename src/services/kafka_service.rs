@@ -98,7 +98,7 @@ impl KafkaService {
         Ok(())
     }
 
-    async fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
         if message.is_subscribe() {
             let subscription_info = message.deserialize_subscription_data()?;
             for subscription in subscription_info {
@@ -129,7 +129,20 @@ impl KafkaService {
                     let consumer: CustomConsumer = consumer_result.unwrap();
                     _ = consumer.subscribe(&[&subscription.topic]);
 
-                    while let Ok(message) = consumer.recv().await {
+                    let cancellation_token = {
+                        let clients = cloned_self.clients.read();
+                        let cancellation_holder = clients.get_client_cancellation_holder(
+                            &subscription.topic,
+                            &subscription.group,
+                        );
+
+                        cancellation_holder.unwrap().token.clone()
+                    };
+
+                    while let Some(message) = tokio::select! {
+                        _ = cancellation_token.cancelled() => None,
+                        result = consumer.recv() => result.ok(),
+                    } {
                         info!("Got a new message: {:?}", message);
 
                         let message_data_raw = message.payload();
@@ -169,6 +182,10 @@ impl KafkaService {
                             warn!("Kafka consumer commit error: {:?}", commit_message_result);
                         }
                     }
+
+                    warn!("Kafka consumer closed, unsubscribing");
+                    consumer.unsubscribe();
+                    warn!("Kafka consumer closed, unsubscribed");
                 });
             }
         }
