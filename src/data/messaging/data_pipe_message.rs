@@ -164,7 +164,7 @@ mod tests {
 
         let message_unwrapped = message.unwrap();
         assert!(message_unwrapped.data.len() > 0);
-        assert!(message_unwrapped.is_unsubscribe() == true);
+        assert!(message_unwrapped.is_unsubscribe());
     }
 
     #[test]
