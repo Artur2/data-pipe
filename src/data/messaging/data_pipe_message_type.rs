@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
 
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum DataPipeMessageType {
     #[default]
     Default,

@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct ClientSubscriptionInfo {
     pub group: String,
     pub topic: String,

@@ -23,7 +23,11 @@ pub enum DataPipeError {
     #[error("Cant parse message, message: {0}")]
     CantParseMessage(String),
     #[error("Subscription for topic {0} and group {1} already exists")]
-    SubscriptionAlreadyExist(String, String)
+    SubscriptionAlreadyExist(String, String),
+    #[error("Cant serialize")]
+    SerializationError,
+    #[error("Not suitable call, reason: {0}")]
+    NotSuitableCall(String)
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;
