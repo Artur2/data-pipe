@@ -4,6 +4,7 @@ use crate::data::error::{DataPipeError, DataPipeResult};
 use std::collections::HashMap;
 use xxhash_rust::xxh32;
 
+// TODO: Management bus, for unsubscribe events
 pub struct ClientsManager {
     clients: HashMap<String, Client>,
     /// Key is hash of topic, group. Value is client identifier

@@ -98,6 +98,11 @@ impl DataPipeMessage {
         let result = rmp_serde::from_slice::<Vec<ClientSubscriptionInfo>>(&self.data);
         Ok(result.map_err(|_| DataPipeError::SerializationError)?)
     }
+
+    /// Message belongs to management process
+    pub fn is_management(&self) -> bool {
+        self.is_subscribe() && self.is_unsubscribe()
+    }
 }
 
 impl std::fmt::Display for DataPipeMessage {
@@ -215,5 +220,48 @@ mod tests {
 
         let result = message.deserialize_subscription_data();
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[ignore = "Just for local test data"]
+    pub fn default_serialize_to_json_message() {
+        let client_identifier = "identifier";
+        let message_identifier = uuid::Uuid::new_v4().to_string();
+        let mut buffer = [0u8; 500];
+        rand::fill(&mut buffer);
+
+        let message = DataPipeMessage::new(
+            client_identifier.to_owned(),
+            message_identifier.to_owned(),
+            DataPipeMessageType::Default,
+            buffer.to_vec(),
+            Some("test".to_owned()),
+            vec![],
+        );
+
+        let raw_string = serde_json::to_string(&message).unwrap();
+        println!("{}", raw_string);
+    }
+
+    #[test]
+    #[ignore = "Just for local test data"]
+    pub fn subscribe_serialize_to_json_message() {
+        let client_identifier = "identifier";
+        let message_identifier = uuid::Uuid::new_v4().to_string();
+
+        let message = DataPipeMessage::with_subscription(
+            client_identifier.to_owned(),
+            message_identifier.to_owned(),
+            &[ClientSubscriptionInfo::new(
+                "test".to_owned(),
+                "test".to_owned(),
+            )],
+            Some("test".to_owned()),
+            vec![],
+        )
+        .unwrap();
+
+        let raw_string = serde_json::to_string(&message).unwrap();
+        println!("{}", raw_string);
     }
 }

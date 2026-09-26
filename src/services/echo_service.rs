@@ -7,6 +7,8 @@ use rand::random_range;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 
+/// Only for testing purposes
+#[allow(dead_code)]
 pub struct EchoService {
     clients: Arc<RwLock<ClientsManager>>,
 }

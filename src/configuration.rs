@@ -1,12 +1,18 @@
 pub struct Configuration {
     /// Кол-во сообщений в буфере отправки в web socket
     pub ws_inbound_channel_capacity: usize,
-    /// Кол-во сообщений в буфере отправки из web socket в kafka
+    /// Кол-во сообщений в буфере отправки из web socket в Kafka
     pub ws_outbound_channel_capacity: usize,
     /// Адрес для биндинга ws
     pub ws_host: String,
     /// Порт для биндинга ws
     pub ws_port: u16,
+    /// Сервера bootstrap для Kafka
+    pub bootstrap_servers: String,
+    /// Таймаут при отправке сообщения в Кафку
+    pub kafka_message_send_timeout: String,
+    /// Таймаут сессии Кафки
+    pub kafka_session_timeout: String,
 }
 
 impl Configuration {
@@ -22,6 +28,9 @@ impl Default for Configuration {
             ws_outbound_channel_capacity: 1024,
             ws_host: "127.0.0.1".to_owned(),
             ws_port: 7878,
+            bootstrap_servers: "localhost:9092".to_owned(),
+            kafka_message_send_timeout: "5000".to_owned(),
+            kafka_session_timeout: "6000".to_owned(),
         }
     }
 }

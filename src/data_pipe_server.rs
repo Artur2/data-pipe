@@ -1,16 +1,16 @@
 use crate::configuration::Configuration;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::DataPipeResult;
-use crate::services::echo_service::EchoService;
+use crate::services::kafka_service::KafkaService;
 use crate::services::web_socket_service::WebSocketService;
-use std::sync::Arc;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 pub struct DataPipeServer {
     configuration: Arc<Configuration>,
     clients: Arc<RwLock<ClientsManager>>,
     web_socket_service: Arc<WebSocketService>,
-    echo_service: Arc<EchoService>,
+    kafka_service: Arc<KafkaService>,
 }
 
 impl DataPipeServer {
@@ -18,12 +18,12 @@ impl DataPipeServer {
         let configuration = Arc::new(configuration);
         let clients = Arc::new(RwLock::new(ClientsManager::new()));
         let web_socket_service = WebSocketService::new(clients.clone(), configuration.clone());
-        let echo_service = EchoService::new(clients.clone());
+        let kafka_service = KafkaService::new(clients.clone(), configuration.clone());
         DataPipeServer {
             web_socket_service,
             clients,
-            echo_service,
             configuration,
+            kafka_service,
         }
     }
 
@@ -32,9 +32,9 @@ impl DataPipeServer {
         ws_service.initialize().await?;
 
         let ws_service_clone = self.web_socket_service.clone();
-        let echo_service_clone = self.echo_service.clone();
         let receiver = ws_service_clone.get_receiver()?;
-        echo_service_clone.initialize(receiver).await;
+        let kafka_service_clone = self.kafka_service.clone();
+        kafka_service_clone.initialize(receiver).await?;
 
         Ok(())
     }
