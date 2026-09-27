@@ -9,7 +9,7 @@ use xxhash_rust::xxh32;
 // TODO: Management bus, for unsubscribe events
 pub struct ClientsManager {
     clients: HashMap<String, Client>,
-    /// Key is hash of topic, group. Value is client identifier
+    /// Key is hash of topic, group. Value is client cancellation holder
     lookup: HashMap<u32, ClientCancellationHolder>,
 }
 
