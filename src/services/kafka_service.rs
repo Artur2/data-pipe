@@ -14,7 +14,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 
-// TODO: Think about disconnection management, when client drops ws connection
 pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
     configuration: Arc<Configuration>,

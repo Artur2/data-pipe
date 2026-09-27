@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh32;
 
-// TODO: Management bus, for unsubscribe events
 pub struct ClientsManager {
     clients: HashMap<String, Client>,
     /// Key is hash of topic, group. Value is client cancellation holder
@@ -79,7 +78,11 @@ impl ClientsManager {
         self.lookup.contains_key(&key)
     }
 
-    pub fn get_client_cancellation_holder(&self, topic: &str, group: &str) -> Option<&ClientCancellationHolder> {
+    pub fn get_client_cancellation_holder(
+        &self,
+        topic: &str,
+        group: &str,
+    ) -> Option<&ClientCancellationHolder> {
         let key = self.compute_hash(topic, group);
         self.lookup.get(&key)
     }
