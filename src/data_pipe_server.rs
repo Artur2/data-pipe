@@ -34,7 +34,7 @@ impl DataPipeServer {
         let ws_service_clone = self.web_socket_service.clone();
         let receiver = ws_service_clone.get_receiver()?;
         let kafka_service_clone = self.kafka_service.clone();
-        kafka_service_clone.initialize(receiver).await?;
+        kafka_service_clone.initialize(receiver)?;
 
         Ok(())
     }

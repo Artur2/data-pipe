@@ -30,19 +30,17 @@ impl KafkaService {
         })
     }
 
-    pub async fn initialize(
+    pub fn initialize(
         self: Arc<Self>,
         receiver: Receiver<DataPipeMessage>,
     ) -> DataPipeResult<()> {
-        self.subscribe(receiver).await?;
+        self.subscribe(receiver)?;
         Ok(())
     }
 
-    async fn subscribe(
-        self: Arc<Self>,
-        mut receiver: Receiver<DataPipeMessage>,
-    ) -> DataPipeResult<()> {
+    fn subscribe(self: Arc<Self>, mut receiver: Receiver<DataPipeMessage>) -> DataPipeResult<()> {
         tokio::spawn(async move {
+            // TODO: Вынести в отдельную функцию
             let producer_result: Result<FutureProducer, DataPipeError> = ClientConfig::new()
                 .set("bootstrap.servers", &self.configuration.bootstrap_servers)
                 .set(
@@ -64,21 +62,20 @@ impl KafkaService {
             loop {
                 while let Ok(message) = receiver.try_recv() {
                     if !message.is_management() {
-                        let topic = message.topic.unwrap();
-                        let mut headers = OwnedHeaders::new();
-                        for header in message.headers {
-                            headers = headers.insert(Header {
-                                key: &header.key,
-                                value: Some(&header.value),
-                            });
+                        let headers = Self::create_headers(&message);
+                        if let Err(_) = &headers {
+                            warn!("Kafka message received a message with no headers");
+                            return;
                         }
+
+                        let topic = message.topic.unwrap();
 
                         let send_result = producer
                             .send(
                                 FutureRecord::to(&topic)
                                     .payload(&message.data)
                                     .key(&message.message_identifier)
-                                    .headers(headers),
+                                    .headers(headers.unwrap()),
                                 Duration::from_secs(0),
                             )
                             .await;
@@ -105,6 +102,7 @@ impl KafkaService {
                 let client_identifier = message.client_identifier.clone();
 
                 tokio::spawn(async move {
+                    // TODO: Вынести в отдельную функцию
                     let context = DefaultContext;
                     let consumer_result = ClientConfig::new()
                         .set("group.id", &subscription.group)
@@ -142,8 +140,6 @@ impl KafkaService {
                         _ = cancellation_token.cancelled() => None,
                         result = consumer.recv() => result.ok(),
                     } {
-                        info!("Got a new message: {:?}", message);
-
                         let message_data_raw = message.payload();
                         if message_data_raw.is_none() {
                             warn!("Kafka message payload is empty");
@@ -190,5 +186,17 @@ impl KafkaService {
         }
 
         Ok(())
+    }
+
+    fn create_headers(message: &DataPipeMessage) -> DataPipeResult<OwnedHeaders> {
+        let mut headers = OwnedHeaders::new();
+        for header in &message.headers {
+            headers = headers.insert(Header {
+                key: &header.key,
+                value: Some(&header.value),
+            });
+        }
+
+        Ok(headers)
     }
 }
