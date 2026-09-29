@@ -101,7 +101,7 @@ impl DataPipeMessage {
 
     /// Message belongs to management process
     pub fn is_management(&self) -> bool {
-        self.is_subscribe() && self.is_unsubscribe()
+        self.is_subscribe() || self.is_unsubscribe()
     }
 }
 

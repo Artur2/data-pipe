@@ -1,10 +1,11 @@
 use crate::configuration::Configuration;
+use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::kafka::default_context::{CustomConsumer, DefaultContext};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
-use log::warn;
+use log::{info, warn};
 use parking_lot::RwLock;
 use rdkafka::consumer::{CommitMode, Consumer};
 use rdkafka::message::{Header, OwnedHeaders};
@@ -34,11 +35,14 @@ impl KafkaService {
     }
 
     pub fn initialize(self: Arc<Self>, receiver: Receiver<DataPipeMessage>) -> DataPipeResult<()> {
-        self.subscribe(receiver)?;
+        _ = self.init_message_processing(receiver);
         Ok(())
     }
 
-    fn subscribe(self: Arc<Self>, mut receiver: Receiver<DataPipeMessage>) -> DataPipeResult<()> {
+    fn init_message_processing(
+        self: Arc<Self>,
+        mut receiver: Receiver<DataPipeMessage>,
+    ) -> DataPipeResult<()> {
         tokio::spawn(async move {
             let producer_result = Self::create_producer(
                 &self.configuration.bootstrap_servers,
@@ -80,7 +84,7 @@ impl KafkaService {
                         }
                     } else {
                         let cloned_self = self.clone();
-                        _ = cloned_self.manage_subscription(message);
+                        _ = cloned_self.manage_subscription(message).await;
                     }
                 }
             }
@@ -89,83 +93,117 @@ impl KafkaService {
         Ok(())
     }
 
-    fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    async fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
         if message.is_subscribe() {
-            let subscription_info = message.deserialize_subscription_data()?;
-            for subscription in subscription_info {
-                let cloned_self = self.clone();
-                let client_identifier = message.client_identifier.clone();
-
-                tokio::spawn(async move {
-                    let consumer_result = Self::create_consumer(
-                        &subscription.group,
-                        &cloned_self.configuration.bootstrap_servers,
-                        &cloned_self.configuration.kafka_session_timeout,
-                    );
-
-                    if consumer_result.is_err() {
-                        warn!("Kafka client creation error");
-                        return;
-                    }
-
-                    let consumer: CustomConsumer = consumer_result.unwrap();
-                    _ = consumer.subscribe(&[&subscription.topic]);
-
-                    let cancellation_token = cloned_self
-                        .clone_cancellation_token(&subscription.topic, &subscription.group);
-
-                    while let Some(message) = tokio::select! {
-                        _ = cancellation_token.cancelled() => None,
-                        result = consumer.recv() => result.ok(),
-                    } {
-                        let message_data_raw = message.payload();
-                        if message_data_raw.is_none() {
-                            warn!("Kafka message payload is empty");
-                            continue;
-                        }
-
-                        {
-                            let message_data = message_data_raw.unwrap();
-                            let clients = cloned_self.clients.read();
-                            let found_client = clients.get(&client_identifier);
-
-                            if let Some(client_option) = found_client {
-                                let message_id = uuid::Uuid::new_v4().to_string();
-                                let data_pipe_message = DataPipeMessage::new(
-                                    client_identifier.to_owned(),
-                                    message_id,
-                                    DataPipeMessageType::Default,
-                                    message_data.to_vec(),
-                                    Some(message.topic().to_owned()),
-                                    vec![],
-                                );
-                                let send_result = client_option.sender.send(data_pipe_message);
-                                if send_result.is_err() {
-                                    warn!("Kafka client send error");
-                                }
-                            } else {
-                                warn!("Kafka client not found");
-                            }
-                        }
-
-                        let commit_message_result =
-                            consumer.commit_message(&message, CommitMode::Async);
-
-                        if commit_message_result.is_err() {
-                            warn!("Kafka consumer commit error: {:?}", commit_message_result);
-                        }
-                    }
-
-                    warn!("Kafka consumer closed, unsubscribing");
-                    consumer.unsubscribe();
-                    warn!("Kafka consumer closed, unsubscribed");
-                });
-            }
+            self.create_subscription(message).await?;
+        } else if message.is_unsubscribe() {
+            self.unsubscribe(message)?;
         }
 
         Ok(())
     }
 
+    async fn create_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+        let subscription_info = message.deserialize_subscription_data()?;
+        for subscription in subscription_info {
+            let cloned_self = self.clone();
+            let client_identifier = message.client_identifier.clone();
+            tokio::task::spawn(async move {
+                info!("Creating subscription for {}", &client_identifier);
+                let cancellation_token = cloned_self.create_client_subscription_info(
+                    &client_identifier,
+                    &subscription.topic,
+                    &subscription.group,
+                );
+
+                let consumer_result = Self::create_consumer(
+                    &subscription.group,
+                    &cloned_self.configuration.bootstrap_servers,
+                    &cloned_self.configuration.kafka_session_timeout,
+                );
+
+                if consumer_result.is_err() {
+                    warn!("Kafka client creation error");
+                    return;
+                }
+
+                let consumer: CustomConsumer = consumer_result.unwrap();
+                _ = consumer.subscribe(&[&subscription.topic]);
+
+                while let Some(message) = tokio::select! {
+                    _ = cancellation_token.cancelled() => None,
+                    result = consumer.recv() => result.ok(),
+                } {
+                    let message_data_raw = message.payload();
+                    if message_data_raw.is_none() {
+                        warn!("Kafka message payload is empty");
+                        continue;
+                    }
+
+                    {
+                        let message_data = message_data_raw.unwrap();
+                        let clients = cloned_self.clients.read();
+                        let found_client = clients.get(&client_identifier);
+
+                        if let Some(client_option) = found_client {
+                            let message_id = uuid::Uuid::new_v4().to_string();
+                            let data_pipe_message = DataPipeMessage::new(
+                                client_identifier.to_owned(),
+                                message_id,
+                                DataPipeMessageType::Default,
+                                message_data.to_vec(),
+                                Some(message.topic().to_owned()),
+                                vec![],
+                            );
+                            let send_result = client_option.sender.send(data_pipe_message);
+                            if send_result.is_err() {
+                                warn!("Kafka client send error");
+                            }
+                        } else {
+                            warn!("Kafka client not found");
+                        }
+                    }
+
+                    let commit_message_result =
+                        consumer.commit_message(&message, CommitMode::Async);
+
+                    if commit_message_result.is_err() {
+                        warn!("Kafka consumer commit error: {:?}", commit_message_result);
+                    }
+                }
+
+                warn!(
+                    "Kafka consumer closed, unsubscribing of client {0} and topic {1}, group {2}",
+                    client_identifier, subscription.topic, subscription.group
+                );
+                consumer.unsubscribe();
+                warn!(
+                    "Kafka consumer closed, unsubscribed of client {0} and topic {1}, group {2}",
+                    client_identifier, subscription.topic, subscription.group
+                );
+            });
+        }
+
+        tokio::task::yield_now().await;
+
+        Ok(())
+    }
+
+    fn unsubscribe(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+        let unsubscribe_data = message.deserialize_subscription_data();
+
+        for subscription in unsubscribe_data? {
+            let clients = self.clients.read();
+            let cancellation_holder =
+                clients.get_client_cancellation_holder(&subscription.topic, &subscription.group);
+            if cancellation_holder.is_some() {
+                let token = cancellation_holder.unwrap().token.clone();
+                token.cancel();
+            }
+        }
+
+        Ok(())
+    }
     fn create_headers(message: &DataPipeMessage) -> DataPipeResult<OwnedHeaders> {
         let mut headers = OwnedHeaders::new();
         for header in &message.headers {
@@ -203,10 +241,23 @@ impl KafkaService {
         consumer_result.map_err(|_| DataPipeError::Unknown)
     }
 
-    fn clone_cancellation_token(&self, topic: &str, group: &str) -> CancellationToken {
-        let clients = self.clients.read();
-        let cancellation_holder = clients.get_client_cancellation_holder(topic, group);
+    fn create_client_subscription_info(
+        &self,
+        client_identifier: &str,
+        topic: &str,
+        group: &str,
+    ) -> CancellationToken {
+        let mut clients = self.clients.write();
+        let _ = clients.add_subscription(
+            client_identifier,
+            ClientSubscriptionInfo::new(topic.to_owned(), group.to_owned()),
+        );
 
-        cancellation_holder.unwrap().token.clone()
+        let holder = clients.get_client_cancellation_holder(topic, group);
+        if let Some(holder) = holder {
+            holder.token.clone()
+        } else {
+            panic!("Cancellation token not exist")
+        }
     }
 }
