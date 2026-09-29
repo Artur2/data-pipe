@@ -4,7 +4,7 @@ use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::kafka::default_context::{CustomConsumer, DefaultContext};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
-use log::{info, warn};
+use log::warn;
 use parking_lot::RwLock;
 use rdkafka::consumer::{CommitMode, Consumer};
 use rdkafka::message::{Header, OwnedHeaders};
@@ -13,11 +13,14 @@ use rdkafka::{ClientConfig, Message};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tokio_util::sync::CancellationToken;
 
 pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
     configuration: Arc<Configuration>,
 }
+
+type ProducerResult = Result<FutureProducer, DataPipeError>;
 
 impl KafkaService {
     pub fn new(
@@ -30,25 +33,17 @@ impl KafkaService {
         })
     }
 
-    pub fn initialize(
-        self: Arc<Self>,
-        receiver: Receiver<DataPipeMessage>,
-    ) -> DataPipeResult<()> {
+    pub fn initialize(self: Arc<Self>, receiver: Receiver<DataPipeMessage>) -> DataPipeResult<()> {
         self.subscribe(receiver)?;
         Ok(())
     }
 
     fn subscribe(self: Arc<Self>, mut receiver: Receiver<DataPipeMessage>) -> DataPipeResult<()> {
         tokio::spawn(async move {
-            // TODO: Вынести в отдельную функцию
-            let producer_result: Result<FutureProducer, DataPipeError> = ClientConfig::new()
-                .set("bootstrap.servers", &self.configuration.bootstrap_servers)
-                .set(
-                    "message.timeout.ms",
-                    &self.configuration.kafka_message_send_timeout,
-                )
-                .create()
-                .map_err(|e| DataPipeError::ProducerCreationError(e.to_string()));
+            let producer_result = Self::create_producer(
+                &self.configuration.bootstrap_servers,
+                &self.configuration.kafka_message_send_timeout,
+            );
 
             if producer_result.is_err() {
                 warn!(
@@ -102,21 +97,11 @@ impl KafkaService {
                 let client_identifier = message.client_identifier.clone();
 
                 tokio::spawn(async move {
-                    // TODO: Вынести в отдельную функцию
-                    let context = DefaultContext;
-                    let consumer_result = ClientConfig::new()
-                        .set("group.id", &subscription.group)
-                        .set(
-                            "bootstrap.servers",
-                            &cloned_self.configuration.bootstrap_servers,
-                        )
-                        .set("enable.partition.eof", "false")
-                        .set(
-                            "session.timeout.ms",
-                            &cloned_self.configuration.kafka_session_timeout,
-                        )
-                        .set("enable.auto.commit", "false")
-                        .create_with_context(context);
+                    let consumer_result = Self::create_consumer(
+                        &subscription.group,
+                        &cloned_self.configuration.bootstrap_servers,
+                        &cloned_self.configuration.kafka_session_timeout,
+                    );
 
                     if consumer_result.is_err() {
                         warn!("Kafka client creation error");
@@ -126,15 +111,8 @@ impl KafkaService {
                     let consumer: CustomConsumer = consumer_result.unwrap();
                     _ = consumer.subscribe(&[&subscription.topic]);
 
-                    let cancellation_token = {
-                        let clients = cloned_self.clients.read();
-                        let cancellation_holder = clients.get_client_cancellation_holder(
-                            &subscription.topic,
-                            &subscription.group,
-                        );
-
-                        cancellation_holder.unwrap().token.clone()
-                    };
+                    let cancellation_token = cloned_self
+                        .clone_cancellation_token(&subscription.topic, &subscription.group);
 
                     while let Some(message) = tokio::select! {
                         _ = cancellation_token.cancelled() => None,
@@ -198,5 +176,37 @@ impl KafkaService {
         }
 
         Ok(headers)
+    }
+
+    fn create_producer(bootstrap_servers: &str, message_send_timeout: &str) -> ProducerResult {
+        ClientConfig::new()
+            .set("bootstrap.servers", bootstrap_servers)
+            .set("message.timeout.ms", message_send_timeout)
+            .create()
+            .map_err(|e| DataPipeError::ProducerCreationError(e.to_string()))
+    }
+
+    fn create_consumer(
+        group: &str,
+        bootstrap_servers: &str,
+        timeout: &str,
+    ) -> DataPipeResult<CustomConsumer> {
+        let context = DefaultContext;
+        let consumer_result = ClientConfig::new()
+            .set("group.id", group)
+            .set("bootstrap.servers", bootstrap_servers)
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", timeout)
+            .set("enable.auto.commit", "false")
+            .create_with_context(context);
+
+        consumer_result.map_err(|_| DataPipeError::Unknown)
+    }
+
+    fn clone_cancellation_token(&self, topic: &str, group: &str) -> CancellationToken {
+        let clients = self.clients.read();
+        let cancellation_holder = clients.get_client_cancellation_holder(topic, group);
+
+        cancellation_holder.unwrap().token.clone()
     }
 }
