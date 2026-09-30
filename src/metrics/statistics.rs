@@ -23,8 +23,8 @@ impl Statistics {
             loop {
                 tick.tick().await;
 
-                let previous_value = self.requests.swap(0, Ordering::Release);
-                self.previous_requests.swap(previous_value, Ordering::Release);
+                let previous_value = self.requests.swap(0, Ordering::AcqRel);
+                self.previous_requests.swap(previous_value, Ordering::AcqRel);
             }
         });
     }
