@@ -21,4 +21,4 @@ impl ConsumerContext for DefaultContext {
     }
 }
 
-pub type CustomConsumer = StreamConsumer<DefaultContext>;
+pub type DefaultConsumer = StreamConsumer<DefaultContext>;

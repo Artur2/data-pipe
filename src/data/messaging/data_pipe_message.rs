@@ -89,7 +89,7 @@ impl DataPipeMessage {
     }
 
     pub fn deserialize_subscription_data(&self) -> DataPipeResult<Vec<ClientSubscriptionInfo>> {
-        if !self.is_unsubscribe() && !self.is_subscribe() {
+        if !self.is_management() {
             return Err(DataPipeError::NotSuitableCall(
                 "Not allowed to get sub/unsub info".to_owned(),
             ));

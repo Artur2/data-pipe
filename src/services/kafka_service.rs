@@ -2,7 +2,7 @@ use crate::configuration::Configuration;
 use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
-use crate::data::kafka::default_context::{CustomConsumer, DefaultContext};
+use crate::data::kafka::default_context::{DefaultConsumer, DefaultContext};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
 use log::{info, warn};
@@ -84,7 +84,10 @@ impl KafkaService {
                         }
                     } else {
                         let cloned_self = self.clone();
-                        _ = cloned_self.manage_subscription(message).await;
+                        let result = cloned_self.manage_subscription(message).await;
+                        if result.is_err() {
+                            warn!("Management process error: {:?}", result);
+                        }
                     }
                 }
             }
@@ -110,7 +113,7 @@ impl KafkaService {
             let client_identifier = message.client_identifier.clone();
             tokio::task::spawn(async move {
                 info!("Creating subscription for {}", &client_identifier);
-                let cancellation_token = cloned_self.create_client_subscription_info(
+                let cancellation_token = cloned_self.create_client_subscription_info_with_token(
                     &client_identifier,
                     &subscription.topic,
                     &subscription.group,
@@ -127,7 +130,7 @@ impl KafkaService {
                     return;
                 }
 
-                let consumer: CustomConsumer = consumer_result.unwrap();
+                let consumer: DefaultConsumer = consumer_result.unwrap();
                 _ = consumer.subscribe(&[&subscription.topic]);
 
                 while let Some(message) = tokio::select! {
@@ -145,7 +148,7 @@ impl KafkaService {
                         let clients = cloned_self.clients.read();
                         let found_client = clients.get(&client_identifier);
 
-                        if let Some(client_option) = found_client {
+                        if let Some(client) = found_client {
                             let message_id = uuid::Uuid::new_v4().to_string();
                             let data_pipe_message = DataPipeMessage::new(
                                 client_identifier.to_owned(),
@@ -155,7 +158,7 @@ impl KafkaService {
                                 Some(message.topic().to_owned()),
                                 vec![],
                             );
-                            let send_result = client_option.sender.send(data_pipe_message);
+                            let send_result = client.sender.send(data_pipe_message);
                             if send_result.is_err() {
                                 warn!("Kafka client send error");
                             }
@@ -193,17 +196,27 @@ impl KafkaService {
         let unsubscribe_data = message.deserialize_subscription_data();
 
         for subscription in unsubscribe_data? {
-            let clients = self.clients.read();
-            let cancellation_holder =
-                clients.get_client_cancellation_holder(&subscription.topic, &subscription.group);
-            if cancellation_holder.is_some() {
-                let token = cancellation_holder.unwrap().token.clone();
-                token.cancel();
+            {
+                let clients = self.clients.read();
+                let cancellation_holder = clients
+                    .get_client_cancellation_holder(&subscription.topic, &subscription.group);
+                if cancellation_holder.is_some() {
+                    let token = cancellation_holder.unwrap().token.clone();
+                    token.cancel();
+                }
             }
+
+            let mut clients = self.clients.write();
+            _ = clients.remove_subscription(
+                &message.client_identifier,
+                &subscription.topic,
+                &subscription.group,
+            );
         }
 
         Ok(())
     }
+
     fn create_headers(message: &DataPipeMessage) -> DataPipeResult<OwnedHeaders> {
         let mut headers = OwnedHeaders::new();
         for header in &message.headers {
@@ -228,7 +241,7 @@ impl KafkaService {
         group: &str,
         bootstrap_servers: &str,
         timeout: &str,
-    ) -> DataPipeResult<CustomConsumer> {
+    ) -> DataPipeResult<DefaultConsumer> {
         let context = DefaultContext;
         let consumer_result = ClientConfig::new()
             .set("group.id", group)
@@ -241,7 +254,7 @@ impl KafkaService {
         consumer_result.map_err(|_| DataPipeError::Unknown)
     }
 
-    fn create_client_subscription_info(
+    fn create_client_subscription_info_with_token(
         &self,
         client_identifier: &str,
         topic: &str,
