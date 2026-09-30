@@ -13,6 +13,7 @@ mod configuration;
 pub mod data;
 pub mod data_pipe_server;
 pub mod services;
+mod metrics;
 
 #[tokio::main]
 async fn main() -> DataPipeResult<()> {

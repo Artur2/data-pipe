@@ -13,6 +13,8 @@ pub struct Configuration {
     pub kafka_message_send_timeout: String,
     /// Таймаут сессии Кафки
     pub kafka_session_timeout: String,
+    /// Собирать ли статистику
+    pub harvest_statistics: bool
 }
 
 impl Configuration {
@@ -24,13 +26,14 @@ impl Configuration {
 impl Default for Configuration {
     fn default() -> Configuration {
         Configuration {
-            ws_inbound_channel_capacity: 1024,
-            ws_outbound_channel_capacity: 1024,
+            ws_inbound_channel_capacity: 10_024,
+            ws_outbound_channel_capacity: 10_024,
             ws_host: "127.0.0.1".to_owned(),
             ws_port: 7878,
             bootstrap_servers: "localhost:9092".to_owned(),
             kafka_message_send_timeout: "5000".to_owned(),
             kafka_session_timeout: "6000".to_owned(),
+            harvest_statistics: false
         }
     }
 }

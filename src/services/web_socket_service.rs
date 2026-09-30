@@ -4,6 +4,7 @@ use crate::data::client::Client;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
+use crate::metrics::statistics::Statistics;
 use log::{info, warn};
 use parking_lot::RwLock;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
@@ -16,12 +17,14 @@ pub struct WebSocketService {
     configuration: Arc<Configuration>,
     clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
+    statistics: Arc<Statistics>,
 }
 
 impl WebSocketService {
     pub fn new(
         clients: Arc<RwLock<ClientsManager>>,
         configuration: Arc<Configuration>,
+        statistics: Arc<Statistics>,
     ) -> Arc<Self> {
         let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(
             configuration.ws_outbound_channel_capacity,
@@ -31,6 +34,7 @@ impl WebSocketService {
             clients,
             sender_out,
             configuration,
+            statistics,
         })
     }
 
@@ -74,9 +78,14 @@ impl WebSocketService {
         mut reader: SplitReader<Stream<Http1>>,
         client_id: &str,
     ) -> DataPipeResult<()> {
+        let cloned_configuration = self.configuration.clone();
         while let Some(Ok(msg)) = reader.next().await {
             match msg {
                 Message::Text(text) => {
+                    if cloned_configuration.harvest_statistics {
+                        self.statistics.clone().increment();
+                    }
+
                     let text_as_string =
                         String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown);
 
