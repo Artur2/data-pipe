@@ -29,7 +29,9 @@ pub enum DataPipeError {
     #[error("Not suitable call, reason: {0}")]
     NotSuitableCall(String),
     #[error("Cant create producer for Kafka, reason: {0}")]
-    ProducerCreationError(String)
+    ProducerCreationError(String),
+    #[error("Cant create consumer: {0}")]
+    ConsumerCreationError(String)
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;

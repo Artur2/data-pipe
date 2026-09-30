@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Just for local test data"]
+    // #[ignore = "Just for local test data"]
     pub fn subscribe_serialize_to_json_message() {
         let client_identifier = "identifier";
         let message_identifier = uuid::Uuid::new_v4().to_string();

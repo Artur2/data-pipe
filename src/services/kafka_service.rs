@@ -5,6 +5,7 @@ use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::kafka::default_context::{DefaultConsumer, DefaultContext};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
+use futures_util::StreamExt;
 use log::{info, warn};
 use parking_lot::RwLock;
 use rdkafka::consumer::{CommitMode, Consumer};
@@ -58,39 +59,40 @@ impl KafkaService {
             }
 
             let producer = producer_result.unwrap();
-            loop {
-                while let Ok(message) = receiver.try_recv() {
-                    if !message.is_management() {
-                        let headers = Self::create_headers(&message);
-                        if let Err(_) = &headers {
-                            warn!("Kafka message received a message with no headers");
-                            return;
-                        }
 
-                        let topic = message.topic.unwrap();
+            while let Ok(message) = receiver.recv().await {
+                if !message.is_management() {
+                    let headers = Self::create_headers(&message);
+                    if let Err(_) = &headers {
+                        warn!("Kafka message received a message with no headers");
+                        return;
+                    }
 
-                        let send_result = producer
-                            .send(
-                                FutureRecord::to(&topic)
-                                    .payload(&message.data)
-                                    .key(&message.message_identifier)
-                                    .headers(headers.unwrap()),
-                                Duration::from_secs(0),
-                            )
-                            .await;
+                    let topic = message.topic.unwrap();
 
-                        if send_result.is_err() {
-                            warn!("Kafka producer send error: {:?}", send_result);
-                        }
-                    } else {
-                        let cloned_self = self.clone();
-                        let result = cloned_self.manage_subscription(message).await;
-                        if result.is_err() {
-                            warn!("Management process error: {:?}", result);
-                        }
+                    let send_result = producer
+                        .send(
+                            FutureRecord::to(&topic)
+                                .payload(&message.data)
+                                .key(&message.message_identifier)
+                                .headers(headers.unwrap()),
+                            Duration::from_secs(0),
+                        )
+                        .await;
+
+                    if send_result.is_err() {
+                        warn!("Kafka producer send error: {:?}", send_result);
+                    }
+                } else {
+                    let cloned_self = self.clone();
+                    let result = cloned_self.manage_subscription(message).await;
+                    if result.is_err() {
+                        warn!("Management process error: {:?}", result);
                     }
                 }
             }
+
+            warn!("Message producing stopped");
         });
 
         Ok(())
@@ -132,10 +134,16 @@ impl KafkaService {
 
                 let consumer: DefaultConsumer = consumer_result.unwrap();
                 _ = consumer.subscribe(&[&subscription.topic]);
+                let mut stream = consumer.stream();
 
                 while let Some(message) = tokio::select! {
+                    stream_result = stream.next() => {
+                            match stream_result {
+                                Some(Ok(msg)) => Some(msg),
+                                _ => None,
+                            }
+                        }
                     _ = cancellation_token.cancelled() => None,
-                    result = consumer.recv() => result.ok(),
                 } {
                     let message_data_raw = message.payload();
                     if message_data_raw.is_none() {
@@ -251,7 +259,7 @@ impl KafkaService {
             .set("enable.auto.commit", "false")
             .create_with_context(context);
 
-        consumer_result.map_err(|_| DataPipeError::Unknown)
+        consumer_result.map_err(|e| DataPipeError::ConsumerCreationError(e.to_string()))
     }
 
     fn create_client_subscription_info_with_token(
