@@ -1,4 +1,5 @@
-﻿using System.Net.WebSockets;
+﻿using System.CommandLine;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -9,41 +10,65 @@ namespace DataPipe.Stress.Cli;
 
 public class Program
 {
-    static Faker _faker = new Faker();
+    static Faker _faker = new();
+    private const string UriArgument = "--uri";
+    private const string SleepOption = "--sleep";
+    private const string TopicOption = "--topic";
+    private const string ClientIdOption = "--client-id";
 
-    public static async Task Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
-        using var cancellationTokenSource = new CancellationTokenSource();
-        using var client = new ClientWebSocket();
-        var uri = new Uri("ws://127.0.0.1:7878/?clientId=identifier");
+        var options = CreateOptions();
 
-        await client.ConnectAsync(uri, cancellationTokenSource.Token);
-
-        _ = Task.Factory.StartNew(async () =>
+        var rootCommand = new RootCommand("Tool for stress testing data-pipe server");
+        foreach (var option in options)
         {
-            while (client.State == WebSocketState.Open)
-            {
-                var randomMessage = CreateRandomMessage();
-                var serializedMessage = JsonSerializer.Serialize(randomMessage, Options());
-                var utf8Buffer = Encoding.UTF8.GetBytes(serializedMessage);
-
-                await client.SendAsync(utf8Buffer, WebSocketMessageType.Text, true, cancellationTokenSource.Token);
-                await Task.Delay(100);
-            }
-        }, TaskCreationOptions.LongRunning);
-
-        while (true)
-        {
-            var key = Console.ReadLine();
-            if (key == "q")
-            {
-                await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disconnected",
-                    cancellationTokenSource.Token);
-                break;
-            }
-
-            await Task.Delay(1000, cancellationTokenSource.Token);
+            rootCommand.Add(option);
         }
+
+        rootCommand.SetAction(async (parsedResult) =>
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            using var client = new ClientWebSocket();
+            var clientId = parsedResult.GetRequiredValue<string>(ClientIdOption);
+            var uriBuilder = new UriBuilder(parsedResult.GetRequiredValue<string>(UriArgument))
+            {
+                Query = "?clientId=" + clientId
+            };
+            var uri = uriBuilder.Uri;
+            var sleep = parsedResult.GetRequiredValue<int>(SleepOption);
+            var topic = parsedResult.GetRequiredValue<string>(TopicOption);
+
+            await client.ConnectAsync(uri, cancellationTokenSource.Token);
+
+            _ = Task.Factory.StartNew(async () =>
+            {
+                while (client.State == WebSocketState.Open)
+                {
+                    var randomMessage = CreateRandomMessage(clientId, topic);
+                    var serializedMessage = JsonSerializer.Serialize(randomMessage, Options());
+                    var utf8Buffer = Encoding.UTF8.GetBytes(serializedMessage);
+
+                    await client.SendAsync(utf8Buffer, WebSocketMessageType.Text, true, cancellationTokenSource.Token);
+                    await Task.Delay(sleep, cancellationTokenSource.Token);
+                }
+            }, TaskCreationOptions.LongRunning);
+
+            while (true)
+            {
+                var key = Console.ReadLine();
+                if (key == "q")
+                {
+                    await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disconnected",
+                        cancellationTokenSource.Token);
+                    break;
+                }
+
+                await Task.Delay(1000, cancellationTokenSource.Token);
+            }
+        });
+
+        return await rootCommand.Parse(args).InvokeAsync();
     }
 
     private static JsonSerializerOptions Options() => new()
@@ -51,10 +76,8 @@ public class Program
         Converters = {new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)},
     };
 
-    private static DataPipeMessage CreateRandomMessage()
+    private static DataPipeMessage CreateRandomMessage(string clientId, string topic)
     {
-        const string clientId = "identifier";
-        const string topic = "test";
         var messageIdentifier = Guid.NewGuid().ToString();
         var amountOfBytes = _faker.Random.Int(0, 500);
         var randomBuffer = _faker.Random.Bytes(amountOfBytes);
@@ -66,5 +89,36 @@ public class Program
             topic);
 
         return message;
+    }
+
+    private static IEnumerable<Option> CreateOptions()
+    {
+        var urlOption = new Option<string>(UriArgument)
+        {
+            Description = "WebSocket server url",
+        };
+
+        var sleepOption = new Option<int>(SleepOption)
+        {
+            Description = "Sleep time in ms between message sending",
+            DefaultValueFactory = (_) => 100
+        };
+
+        var topicOption = new Option<string>(TopicOption)
+        {
+            Description = "Topic name",
+            DefaultValueFactory = (_) => "test"
+        };
+
+        var clientIdOption = new Option<string>(ClientIdOption)
+        {
+            Description = "Client ID",
+            DefaultValueFactory = (_) => "Identity"
+        };
+
+        yield return urlOption;
+        yield return sleepOption;
+        yield return topicOption;
+        yield return clientIdOption;
     }
 }

@@ -195,8 +195,6 @@ impl KafkaService {
             });
         }
 
-        tokio::task::yield_now().await;
-
         Ok(())
     }
 
