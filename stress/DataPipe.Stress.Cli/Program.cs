@@ -1,4 +1,5 @@
-﻿using System.CommandLine;
+﻿using System.Buffers;
+using System.CommandLine;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -45,12 +46,25 @@ public class Program
             {
                 while (client.State == WebSocketState.Open)
                 {
-                    var randomMessage = CreateRandomMessage(clientId, topic);
+                    var rented = ArrayPool<byte>.Shared.Rent(1024);
+                    var randomMessage = CreateRandomMessage(clientId, topic, rented);
                     var serializedMessage = JsonSerializer.Serialize(randomMessage, Options());
-                    var utf8Buffer = Encoding.UTF8.GetBytes(serializedMessage);
-
-                    await client.SendAsync(utf8Buffer, WebSocketMessageType.Text, true, cancellationTokenSource.Token);
-                    await Task.Delay(sleep, cancellationTokenSource.Token);
+                    var utf8BufferLength = Encoding.UTF8.GetByteCount(serializedMessage);
+                    var buffer = ArrayPool<byte>.Shared.Rent(utf8BufferLength);
+                    try
+                    {
+                        Encoding.UTF8.GetBytes(serializedMessage, buffer);
+                        var memoryBlock = buffer.AsMemory(0, utf8BufferLength);
+                        await client.SendAsync(memoryBlock, WebSocketMessageType.Text, true,
+                            cancellationTokenSource.Token);
+                        
+                        await Task.Delay(sleep, cancellationTokenSource.Token);
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(rented);
+                        ArrayPool<byte>.Shared.Return(buffer, true);
+                    }
                 }
             }, TaskCreationOptions.LongRunning);
 
@@ -76,16 +90,17 @@ public class Program
         Converters = {new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)},
     };
 
-    private static DataPipeMessage CreateRandomMessage(string clientId, string topic)
+    private static DataPipeMessage CreateRandomMessage(string clientId, string topic, byte[] buffer)
     {
         var messageIdentifier = Guid.NewGuid().ToString();
-        var amountOfBytes = _faker.Random.Int(0, 500);
-        var randomBuffer = _faker.Random.Bytes(amountOfBytes);
+        var rng = new Random();
+        rng.NextBytes(buffer);
+
         var message = new DataPipeMessage(clientId,
             messageIdentifier,
             [],
             DataPipeMessageType.Default,
-            randomBuffer,
+            buffer,
             topic);
 
         return message;

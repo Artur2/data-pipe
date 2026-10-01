@@ -28,6 +28,7 @@ pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPip
     Err(ClientIdentificationError(error))
 }
 
+#[allow(dead_code)]
 pub fn create_random_message(client_identifier: String) -> DataPipeMessage {
     let mut data = [0u8; 500];
     rand::fill(&mut data);
