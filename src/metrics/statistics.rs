@@ -1,7 +1,7 @@
+use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
-use log::info;
 use tokio::time::interval;
 
 pub struct Statistics {
@@ -17,14 +17,15 @@ impl Statistics {
         })
     }
 
-    pub async fn init(self: Arc<Self>) {
+    pub fn init(self: Arc<Self>) {
         tokio::spawn(async move {
             let mut tick = interval(Duration::from_secs(1));
             loop {
                 tick.tick().await;
 
                 let previous_value = self.requests.swap(0, Ordering::AcqRel);
-                self.previous_requests.swap(previous_value, Ordering::AcqRel);
+                self.previous_requests
+                    .swap(previous_value, Ordering::AcqRel);
             }
         });
     }
