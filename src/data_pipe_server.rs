@@ -46,7 +46,7 @@ impl DataPipeServer {
 
         if self.configuration.harvest_statistics {
             let initialize_statistics = self.statistics.clone();
-            initialize_statistics.init().await;
+            initialize_statistics.init();
 
             let printing_statistics = self.statistics.clone();
             tokio::spawn(async move {
