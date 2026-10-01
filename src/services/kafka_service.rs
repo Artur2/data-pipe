@@ -85,7 +85,7 @@ impl KafkaService {
                     }
                 } else {
                     let cloned_self = self.clone();
-                    let result = cloned_self.manage_subscription(message).await;
+                    let result = cloned_self.manage_subscription(message);
                     if result.is_err() {
                         warn!("Management process error: {:?}", result);
                     }
@@ -98,9 +98,9 @@ impl KafkaService {
         Ok(())
     }
 
-    async fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
         if message.is_subscribe() {
-            self.create_subscription(message).await?;
+            self.create_subscription(message)?
         } else if message.is_unsubscribe() {
             self.unsubscribe(message)?;
         }
@@ -108,7 +108,7 @@ impl KafkaService {
         Ok(())
     }
 
-    async fn create_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    fn create_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
         let subscription_info = message.deserialize_subscription_data()?;
         for subscription in subscription_info {
             let cloned_self = self.clone();
