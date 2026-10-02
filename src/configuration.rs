@@ -16,7 +16,7 @@ pub struct Configuration {
     /// Собирать ли статистику
     pub harvest_statistics: bool,
     /// Разрешенное кол-во сообщений в секунду
-    pub web_socket_incoming_message_rate_limit: u32
+    pub ws_socket_incoming_message_rate_limit: u32
 }
 
 impl Configuration {
@@ -36,7 +36,7 @@ impl Default for Configuration {
             kafka_message_send_timeout: "5000".to_owned(),
             kafka_session_timeout: "6000".to_owned(),
             harvest_statistics: false,
-            web_socket_incoming_message_rate_limit: 200
+            ws_socket_incoming_message_rate_limit: 100
         }
     }
 }
