@@ -108,18 +108,10 @@ impl WebSocketService {
                         _ => {}
                     }
                 }
-                Message::Binary(_) => {
-                    info!("Received binary message");
-                }
-                Message::Ping(_) => {
-                    info!("Ping");
-                }
-                Message::Pong(_) => {
-                    info!("Pong");
-                }
                 Message::Close(_) => {
                     self.clone().remove_client(client_id);
                 }
+                _ => warn!("Not supported message request"),
             }
         }
 
@@ -131,7 +123,6 @@ impl WebSocketService {
         self: Arc<Self>,
         mut rx: Receiver<DataPipeMessage>,
         mut ws_writer: SplitWriter<Stream<Http1>>,
-        client_id: &str,
     ) -> DataPipeResult<()> {
         // receive message from outside and write it to ws
         while let Ok(msg) = rx.recv().await {
@@ -234,7 +225,7 @@ impl WebSocketService {
                         }
 
                         _ = writer_self
-                            .web_socket_writer(client_receiver.unwrap(), writer, &client_id_writer)
+                            .web_socket_writer(client_receiver.unwrap(), writer)
                             .await;
                     });
                     tokio::task::spawn(async move {
