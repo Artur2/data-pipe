@@ -5,9 +5,13 @@ use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::metrics::statistics::Statistics;
+use governor::clock::DefaultClock;
+use governor::state::{InMemoryState, NotKeyed};
+use governor::{Quota, RateLimiter};
 use log::{info, warn};
 use parking_lot::RwLock;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -20,6 +24,7 @@ pub struct WebSocketService {
     clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
     statistics: Arc<Statistics>,
+    rate_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
 }
 
 impl WebSocketService {
@@ -32,11 +37,17 @@ impl WebSocketService {
             configuration.ws_outbound_channel_capacity,
         );
 
+        let quota = Quota::per_second(unsafe {
+            NonZeroU32::new_unchecked(configuration.web_socket_incoming_message_rate_limit)
+        });
+        let rate_limiter = Arc::new(RateLimiter::direct(quota));
+
         Arc::new(Self {
             clients,
             sender_out,
             configuration,
             statistics,
+            rate_limiter,
         })
     }
 
@@ -84,9 +95,11 @@ impl WebSocketService {
     ) -> DataPipeResult<()> {
         while let Some(Ok(msg)) = reader.next().await {
             let cloned_self = self.clone();
+            let cloned_rate_limiter = self.rate_limiter.clone();
             match msg {
                 Message::Text(text) => {
                     cloned_self.write_per_message_statistics();
+                    cloned_rate_limiter.until_ready().await;
 
                     let text_as_string =
                         String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown);

@@ -14,7 +14,9 @@ pub struct Configuration {
     /// Таймаут сессии Кафки
     pub kafka_session_timeout: String,
     /// Собирать ли статистику
-    pub harvest_statistics: bool
+    pub harvest_statistics: bool,
+    /// Разрешенное кол-во сообщений в секунду
+    pub web_socket_incoming_message_rate_limit: u32
 }
 
 impl Configuration {
@@ -33,7 +35,8 @@ impl Default for Configuration {
             bootstrap_servers: "localhost:9092".to_owned(),
             kafka_message_send_timeout: "5000".to_owned(),
             kafka_session_timeout: "6000".to_owned(),
-            harvest_statistics: false
+            harvest_statistics: false,
+            web_socket_incoming_message_rate_limit: 200
         }
     }
 }
