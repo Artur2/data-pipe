@@ -1,4 +1,5 @@
-use crate::configuration::Configuration;
+use crate::configuration::configuration_factory::ConfigurationFactory;
+use crate::configuration::default_configuration_factory::DefaultConfigurationFactory;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data_pipe_server::DataPipeServer;
 use log::LevelFilter;
@@ -8,12 +9,12 @@ use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-pub mod common;
+mod common;
 mod configuration;
-pub mod data;
-pub mod data_pipe_server;
-pub mod services;
+mod data;
+mod data_pipe_server;
 mod metrics;
+mod services;
 
 #[tokio::main]
 async fn main() -> DataPipeResult<()> {
@@ -25,7 +26,10 @@ async fn main() -> DataPipeResult<()> {
     )
     .unwrap();
 
-    let data_pipe_server = DataPipeServer::new(Configuration::default());
+    let config_factory = create_configuration_factory(None)?;
+    let config = config_factory.create();
+
+    let data_pipe_server = DataPipeServer::new(config);
     data_pipe_server.initialize().await?;
 
     loop {
@@ -41,4 +45,15 @@ async fn main() -> DataPipeResult<()> {
     }
 
     Ok(())
+}
+
+fn create_configuration_factory(
+    path_to_configuration_file: Option<&str>,
+) -> DataPipeResult<Box<dyn ConfigurationFactory>> {
+    #[allow(unused_variables)]
+    if let Some(path_to_configuration_file) = path_to_configuration_file {
+        todo!("Implement parsing of toml config")
+    } else {
+        Ok(Box::new(DefaultConfigurationFactory::new()))
+    }
 }

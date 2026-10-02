@@ -1,4 +1,4 @@
-use crate::configuration::Configuration;
+use crate::configuration::configuration::DataPipeConfiguration;
 use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
-    configuration: Arc<Configuration>,
+    configuration: Arc<DataPipeConfiguration>,
 }
 
 type ProducerResult = Result<FutureProducer, DataPipeError>;
@@ -27,7 +27,7 @@ type ProducerResult = Result<FutureProducer, DataPipeError>;
 impl KafkaService {
     pub fn new(
         clients: Arc<RwLock<ClientsManager>>,
-        configuration: Arc<Configuration>,
+        configuration: Arc<DataPipeConfiguration>,
     ) -> Arc<KafkaService> {
         Arc::new(KafkaService {
             clients,

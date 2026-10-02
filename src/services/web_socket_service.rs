@@ -1,5 +1,5 @@
 use crate::common::utils;
-use crate::configuration::Configuration;
+use crate::configuration::configuration::DataPipeConfiguration;
 use crate::data::client::Client;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
@@ -20,7 +20,7 @@ use tokio::time::sleep;
 
 #[allow(dead_code)]
 pub struct WebSocketService {
-    configuration: Arc<Configuration>,
+    configuration: Arc<DataPipeConfiguration>,
     clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
     statistics: Arc<Statistics>,
@@ -30,7 +30,7 @@ pub struct WebSocketService {
 impl WebSocketService {
     pub fn new(
         clients: Arc<RwLock<ClientsManager>>,
-        configuration: Arc<Configuration>,
+        configuration: Arc<DataPipeConfiguration>,
         statistics: Arc<Statistics>,
     ) -> Arc<Self> {
         let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(

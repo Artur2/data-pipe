@@ -1,4 +1,4 @@
-use crate::configuration::Configuration;
+use crate::configuration::configuration::DataPipeConfiguration;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::DataPipeResult;
 use crate::metrics::statistics::Statistics;
@@ -11,14 +11,13 @@ use tokio::time::sleep;
 
 pub struct DataPipeServer {
     statistics: Arc<Statistics>,
-    configuration: Arc<Configuration>,
-    clients: Arc<RwLock<ClientsManager>>,
+    configuration: Arc<DataPipeConfiguration>,
     web_socket_service: Arc<WebSocketService>,
     kafka_service: Arc<KafkaService>,
 }
 
 impl DataPipeServer {
-    pub fn new(configuration: Configuration) -> DataPipeServer {
+    pub fn new(configuration: DataPipeConfiguration) -> DataPipeServer {
         let statistics = Statistics::new();
         let configuration = Arc::new(configuration);
         let clients = Arc::new(RwLock::new(ClientsManager::new()));
@@ -28,7 +27,6 @@ impl DataPipeServer {
 
         DataPipeServer {
             web_socket_service,
-            clients,
             configuration,
             kafka_service,
             statistics,
