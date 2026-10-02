@@ -4,14 +4,12 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Bogus;
 using DataPipe.Stress.Cli.Messaging;
 
 namespace DataPipe.Stress.Cli;
 
 public class Program
 {
-    static Faker _faker = new();
     private const string UriArgument = "--uri";
     private const string SleepOption = "--sleep";
     private const string TopicOption = "--topic";
