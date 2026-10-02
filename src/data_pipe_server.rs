@@ -52,7 +52,7 @@ impl DataPipeServer {
             tokio::spawn(async move {
                 loop {
                     let looping_stats = printing_statistics.clone();
-                    looping_stats.print_requests_per_second();
+                    looping_stats.print_statistics();
                     sleep(Duration::from_secs(1)).await;
                 }
             });

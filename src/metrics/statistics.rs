@@ -7,6 +7,7 @@ use tokio::time::interval;
 pub struct Statistics {
     requests: AtomicU32,
     previous_requests: AtomicU32,
+    out_broadcast_messages_count: AtomicU32,
 }
 
 impl Statistics {
@@ -14,6 +15,7 @@ impl Statistics {
         Arc::new(Self {
             requests: AtomicU32::new(0),
             previous_requests: AtomicU32::new(0),
+            out_broadcast_messages_count: AtomicU32::new(0),
         })
     }
 
@@ -30,14 +32,20 @@ impl Statistics {
         });
     }
 
-    pub fn increment(self: Arc<Self>) {
+    pub fn increment_requests_per_second_ws_out(self: Arc<Self>) {
         self.requests.fetch_add(1, Ordering::Release);
     }
 
-    pub fn print_requests_per_second(self: Arc<Self>) {
+    pub fn set_out_broadcast_messages_count(self: Arc<Self>, count: u32) {
+        self.out_broadcast_messages_count.store(count, Ordering::Release);
+    }
+
+    pub fn print_statistics(self: Arc<Self>) {
         info!(
-            "Current throughput of incoming messages in web_socket_service: {} requests/sec",
-            self.previous_requests.load(Ordering::Acquire)
+            "Current throughput of incoming messages in web_socket_service: {} requests/sec\n\
+             Current count of outbound messages: {}\n",
+            self.previous_requests.load(Ordering::Acquire),
+            self.out_broadcast_messages_count.load(Ordering::Acquire)
         );
     }
 }

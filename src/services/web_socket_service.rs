@@ -9,8 +9,10 @@ use log::{info, warn};
 use parking_lot::RwLock;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::time::sleep;
 
 #[allow(dead_code)]
 pub struct WebSocketService {
@@ -39,7 +41,9 @@ impl WebSocketService {
     }
 
     pub async fn initialize(self: Arc<Self>) -> DataPipeResult<()> {
+        let cloned_self = self.clone();
         tokio::spawn(self.bind());
+        cloned_self.start_statistics_loop();
 
         Ok(())
     }
@@ -78,13 +82,11 @@ impl WebSocketService {
         mut reader: SplitReader<Stream<Http1>>,
         client_id: &str,
     ) -> DataPipeResult<()> {
-        let cloned_configuration = self.configuration.clone();
         while let Some(Ok(msg)) = reader.next().await {
+            let cloned_self = self.clone();
             match msg {
                 Message::Text(text) => {
-                    if cloned_configuration.harvest_statistics {
-                        self.statistics.clone().increment();
-                    }
+                    cloned_self.write_per_message_statistics();
 
                     let text_as_string =
                         String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown);
@@ -263,5 +265,27 @@ impl WebSocketService {
         }
 
         clients.remove(client_id);
+    }
+
+    fn start_statistics_loop(self: Arc<Self>) {
+        if self.configuration.harvest_statistics {
+            let cloned_statistics = self.statistics.clone();
+            let cloned_sender_out = self.sender_out.clone();
+            tokio::spawn(async move {
+                loop {
+                    let len = cloned_sender_out.len();
+                    let statistics = cloned_statistics.clone();
+                    statistics.set_out_broadcast_messages_count(len as u32);
+                    sleep(Duration::from_secs(1)).await;
+                }
+            });
+        }
+    }
+
+    fn write_per_message_statistics(self: Arc<Self>) {
+        if self.configuration.harvest_statistics {
+            let statistics_for_requests = self.statistics.clone();
+            statistics_for_requests.increment_requests_per_second_ws_out();
+        }
     }
 }
