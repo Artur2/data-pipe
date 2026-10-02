@@ -1,5 +1,6 @@
 use crate::configuration::configuration::DataPipeConfiguration;
 use crate::configuration::configuration_factory::ConfigurationFactory;
+use crate::data::error::DataPipeResult;
 
 pub struct DefaultConfigurationFactory;
 
@@ -10,7 +11,7 @@ impl DefaultConfigurationFactory {
 }
 
 impl ConfigurationFactory for DefaultConfigurationFactory {
-    fn create(&self) -> DataPipeConfiguration {
-        DataPipeConfiguration::default()
+    fn create(&self) -> DataPipeResult<DataPipeConfiguration> {
+        Ok(DataPipeConfiguration::default())
     }
 }

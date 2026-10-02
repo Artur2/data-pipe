@@ -31,7 +31,9 @@ pub enum DataPipeError {
     #[error("Cant create producer for Kafka, reason: {0}")]
     ProducerCreationError(String),
     #[error("Cant create consumer: {0}")]
-    ConsumerCreationError(String)
+    ConsumerCreationError(String),
+    #[error("Cant configure, reason - {0}")]
+    ConfigurationError(String),
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;

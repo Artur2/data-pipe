@@ -1,8 +1,9 @@
 use crate::configuration::configuration_factory::ConfigurationFactory;
 use crate::configuration::default_configuration_factory::DefaultConfigurationFactory;
+use crate::configuration::toml_configuration_factory::TomlConfigurationFactory;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data_pipe_server::DataPipeServer;
-use log::LevelFilter;
+use log::{LevelFilter, error};
 use mimalloc::MiMalloc;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
 
@@ -27,7 +28,7 @@ async fn main() -> DataPipeResult<()> {
     .unwrap();
 
     let config_factory = create_configuration_factory(None)?;
-    let config = config_factory.create();
+    let config = config_factory.create()?;
 
     let data_pipe_server = DataPipeServer::new(config);
     data_pipe_server.initialize().await?;
@@ -52,7 +53,9 @@ fn create_configuration_factory(
 ) -> DataPipeResult<Box<dyn ConfigurationFactory>> {
     #[allow(unused_variables)]
     if let Some(path_to_configuration_file) = path_to_configuration_file {
-        todo!("Implement parsing of toml config")
+        let toml_configuration_factory =
+            TomlConfigurationFactory::new(path_to_configuration_file.to_owned());
+        Ok(Box::new(toml_configuration_factory))
     } else {
         Ok(Box::new(DefaultConfigurationFactory::new()))
     }
