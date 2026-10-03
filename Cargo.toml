@@ -11,7 +11,7 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-sockudo-ws = { version = "2.0.1", features = ["full"] }
+sockudo-ws = { version = "3.0.0", features = ["full"] }
 tokio = "1.53.1"
 regex = "1.13.1"
 log = "0.4.34"
