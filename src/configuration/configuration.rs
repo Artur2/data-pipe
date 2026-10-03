@@ -20,11 +20,11 @@ pub struct DataPipeConfiguration {
 }
 
 impl DataPipeConfiguration {
-    
+
     pub fn new() -> Self {
         DataPipeConfiguration::default()
     }
-    
+
     pub fn get_ws_binding_address(&self) -> String {
         format!("{}:{}", self.ws_host, self.ws_port)
     }

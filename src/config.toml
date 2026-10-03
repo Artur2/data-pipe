@@ -1,0 +1,9 @@
+ws_inbound_channel_capacity = 1024
+ws_outbound_channel_capacity = 1024
+ws_host = "127.0.0.1"
+ws_port = 7878
+ws_socket_incoming_message_rate_limit = 100
+bootstrap_servers = "localhost:9092"
+kafka_message_send_timeout = "5000"
+kafka_session_timeout = "6000"
+harvest_statistics = false

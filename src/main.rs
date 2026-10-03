@@ -3,7 +3,8 @@ use crate::configuration::default_configuration_factory::DefaultConfigurationFac
 use crate::configuration::toml_configuration_factory::TomlConfigurationFactory;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data_pipe_server::DataPipeServer;
-use log::{LevelFilter, error};
+use clap::Parser;
+use log::LevelFilter;
 use mimalloc::MiMalloc;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
 
@@ -17,6 +18,13 @@ mod data_pipe_server;
 mod metrics;
 mod services;
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[arg(short, long)]
+    pub config_path: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> DataPipeResult<()> {
     TermLogger::init(
@@ -26,8 +34,10 @@ async fn main() -> DataPipeResult<()> {
         ColorChoice::Auto,   // Automatically use colors if supported
     )
     .unwrap();
+    
+    let args = Args::parse();
 
-    let config_factory = create_configuration_factory(None)?;
+    let config_factory = create_configuration_factory(args.config_path)?;
     let config = config_factory.create()?;
 
     let data_pipe_server = DataPipeServer::new(config);
@@ -49,7 +59,7 @@ async fn main() -> DataPipeResult<()> {
 }
 
 fn create_configuration_factory(
-    path_to_configuration_file: Option<&str>,
+    path_to_configuration_file: Option<String>,
 ) -> DataPipeResult<Box<dyn ConfigurationFactory>> {
     #[allow(unused_variables)]
     if let Some(path_to_configuration_file) = path_to_configuration_file {
