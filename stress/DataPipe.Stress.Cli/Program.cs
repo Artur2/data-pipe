@@ -44,15 +44,15 @@ public class Program
             {
                 while (client.State == WebSocketState.Open)
                 {
-                    var rented = ArrayPool<byte>.Shared.Rent(1024);
-                    var randomMessage = CreateRandomMessage(clientId, topic, rented);
+                    var dataBuffer = ArrayPool<byte>.Shared.Rent(1024);
+                    var randomMessage = CreateRandomMessage(clientId, topic, dataBuffer);
                     var serializedMessage = JsonSerializer.Serialize(randomMessage, Options());
                     var utf8BufferLength = Encoding.UTF8.GetByteCount(serializedMessage);
-                    var buffer = ArrayPool<byte>.Shared.Rent(utf8BufferLength);
+                    var bufferForSerializedMessage = ArrayPool<byte>.Shared.Rent(utf8BufferLength);
                     try
                     {
-                        Encoding.UTF8.GetBytes(serializedMessage, buffer);
-                        var memoryBlock = buffer.AsMemory(0, utf8BufferLength);
+                        Encoding.UTF8.GetBytes(serializedMessage, bufferForSerializedMessage);
+                        var memoryBlock = bufferForSerializedMessage.AsMemory(0, utf8BufferLength);
                         await client.SendAsync(memoryBlock, WebSocketMessageType.Text, true,
                             cancellationTokenSource.Token);
                         
@@ -60,8 +60,8 @@ public class Program
                     }
                     finally
                     {
-                        ArrayPool<byte>.Shared.Return(rented);
-                        ArrayPool<byte>.Shared.Return(buffer, true);
+                        ArrayPool<byte>.Shared.Return(dataBuffer);
+                        ArrayPool<byte>.Shared.Return(bufferForSerializedMessage, true);
                     }
                 }
             }, TaskCreationOptions.LongRunning);
