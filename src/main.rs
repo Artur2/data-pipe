@@ -21,7 +21,11 @@ mod services;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        help = "File must be toml, example: src/config, without extension"
+    )]
     pub config_path: Option<String>,
 }
 
@@ -34,7 +38,7 @@ async fn main() -> DataPipeResult<()> {
         ColorChoice::Auto,   // Automatically use colors if supported
     )
     .unwrap();
-    
+
     let args = Args::parse();
 
     let config_factory = create_configuration_factory(args.config_path)?;

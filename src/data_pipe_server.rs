@@ -23,7 +23,8 @@ impl DataPipeServer {
         let clients = Arc::new(RwLock::new(ClientsManager::new()));
         let web_socket_service =
             WebSocketService::new(clients.clone(), configuration.clone(), statistics.clone());
-        let kafka_service = KafkaService::new(clients.clone(), configuration.clone());
+        let kafka_service =
+            KafkaService::new(clients.clone(), configuration.clone(), statistics.clone());
 
         DataPipeServer {
             web_socket_service,

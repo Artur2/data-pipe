@@ -8,7 +8,7 @@ pub struct DataPipeConfiguration {
     /// Порт для биндинга ws
     pub ws_port: u16,
     /// Разрешенное кол-во сообщений в секунду
-    pub ws_socket_incoming_message_rate_limit: u32,
+    pub ws_incoming_message_rate_limit: u32,
     /// Сервера bootstrap для Kafka
     pub bootstrap_servers: String,
     /// Таймаут при отправке сообщения в Кафку
@@ -37,7 +37,7 @@ impl Default for DataPipeConfiguration {
             ws_outbound_channel_capacity: 10_024,
             ws_host: "127.0.0.1".to_owned(),
             ws_port: 7878,
-            ws_socket_incoming_message_rate_limit: 100,
+            ws_incoming_message_rate_limit: 1_000,
             bootstrap_servers: "localhost:9092".to_owned(),
             kafka_message_send_timeout: "5000".to_owned(),
             kafka_session_timeout: "6000".to_owned(),

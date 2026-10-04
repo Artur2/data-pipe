@@ -38,7 +38,7 @@ impl WebSocketService {
         );
 
         let quota = Quota::per_second(
-            NonZeroU32::new(configuration.ws_socket_incoming_message_rate_limit).unwrap(),
+            NonZeroU32::new(configuration.ws_incoming_message_rate_limit).unwrap(),
         );
         let rate_limiter = Arc::new(RateLimiter::direct(quota));
 

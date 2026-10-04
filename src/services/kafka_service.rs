@@ -5,6 +5,7 @@ use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::kafka::default_context::{DefaultConsumer, DefaultContext};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
+use crate::metrics::statistics::Statistics;
 use futures_util::StreamExt;
 use log::{info, warn};
 use parking_lot::RwLock;
@@ -20,6 +21,7 @@ use tokio_util::sync::CancellationToken;
 pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
     configuration: Arc<DataPipeConfiguration>,
+    statistics: Arc<Statistics>,
 }
 
 type ProducerResult = Result<FutureProducer, DataPipeError>;
@@ -28,10 +30,12 @@ impl KafkaService {
     pub fn new(
         clients: Arc<RwLock<ClientsManager>>,
         configuration: Arc<DataPipeConfiguration>,
+        statistics: Arc<Statistics>,
     ) -> Arc<KafkaService> {
         Arc::new(KafkaService {
             clients,
             configuration,
+            statistics,
         })
     }
 
@@ -59,9 +63,12 @@ impl KafkaService {
             }
 
             let producer = producer_result.unwrap();
+            let cloned_stats = self.statistics.clone();
 
             while let Ok(message) = receiver.recv().await {
+                let cloned_stats = cloned_stats.clone();
                 if !message.is_management() {
+                    cloned_stats.increment_request_per_second_kafka_in();
                     let headers = Self::create_headers(&message);
                     if let Err(_) = &headers {
                         warn!("Kafka message received a message with no headers");
@@ -69,20 +76,22 @@ impl KafkaService {
                     }
 
                     let topic = message.topic.unwrap();
+                    let cloned_producer = producer.clone();
+                    tokio::spawn(async move {
+                        let result = cloned_producer
+                            .send(
+                                FutureRecord::to(&topic)
+                                    .payload(&message.data)
+                                    .key(&message.message_identifier)
+                                    .headers(headers.unwrap()),
+                                Duration::from_secs(1),
+                            )
+                            .await;
 
-                    let send_result = producer
-                        .send(
-                            FutureRecord::to(&topic)
-                                .payload(&message.data)
-                                .key(&message.message_identifier)
-                                .headers(headers.unwrap()),
-                            Duration::from_secs(0),
-                        )
-                        .await;
-
-                    if send_result.is_err() {
-                        warn!("Kafka producer send error: {:?}", send_result);
-                    }
+                        if result.is_err() {
+                            warn!("Kafka message produced error: {:?}", result.err().unwrap());
+                        }
+                    });
                 } else {
                     let cloned_self = self.clone();
                     let result = cloned_self.manage_subscription(message);
@@ -239,6 +248,10 @@ impl KafkaService {
         ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
             .set("message.timeout.ms", message_send_timeout)
+            .set("batch.size", "65536")
+            .set("linger.ms", "50")
+            .set("queue.buffering.max.kbytes", "524288")
+            .set("queue.buffering.max.messages", "100000")
             .create()
             .map_err(|e| DataPipeError::ProducerCreationError(e.to_string()))
     }

@@ -50,7 +50,7 @@ impl ConfigurationFactory for TomlConfigurationFactory {
         config.bootstrap_servers = build.get_string("bootstrap_servers").map_err(|_| {
             DataPipeError::ConfigurationError("Cant parse bootstrap_servers".to_owned())
         })?;
-        config.ws_socket_incoming_message_rate_limit = build
+        config.ws_incoming_message_rate_limit = build
             .get_int("ws_socket_incoming_message_rate_limit")
             .map_err(|_| {
                 DataPipeError::ConfigurationError(

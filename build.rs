@@ -12,7 +12,7 @@ fn main() {
     fs::copy("src/config.toml", dest_path).unwrap();
 
     println!(
-        "cargo::warning=The output directory is for config.toml is: {}",
+        "cargo::warning=The output directory for config.toml is: {}",
         out_dir
     );
 }
