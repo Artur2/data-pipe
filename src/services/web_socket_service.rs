@@ -10,6 +10,7 @@ use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
 use log::{info, warn};
 use parking_lot::RwLock;
+use sockudo_ws::error::CloseReason;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 
 #[allow(dead_code)]
 pub struct WebSocketService {
@@ -92,6 +94,7 @@ impl WebSocketService {
         sender: Sender<DataPipeMessage>,
         mut reader: SplitReader<Stream<Http1>>,
         client_id: &str,
+        cancellation_token: CancellationToken,
     ) -> DataPipeResult<()> {
         while let Some(Ok(msg)) = reader.next().await {
             let cloned_self = self.clone();
@@ -121,9 +124,7 @@ impl WebSocketService {
                         _ => {}
                     }
                 }
-                Message::Close(_) => {
-                    self.clone().remove_client(client_id);
-                }
+                Message::Close(_) => cancellation_token.cancel(),
                 _ => warn!("Not supported message request"),
             }
         }
@@ -136,18 +137,28 @@ impl WebSocketService {
         self: Arc<Self>,
         mut rx: Receiver<DataPipeMessage>,
         mut ws_writer: SplitWriter<Stream<Http1>>,
-    ) -> DataPipeResult<()> {
+        cancellation_token: CancellationToken,
+    ) -> DataPipeResult<SplitWriter<Stream<Http1>>> {
         // receive message from outside and write it to ws
-        while let Ok(msg) = rx.recv().await {
-            let message = serde_json::to_string(&msg).unwrap();
 
-            ws_writer
-                .send(Message::from(message))
-                .await
-                .map_err(|_| DataPipeError::SendMessageFailed)?;
+        loop {
+            let message = tokio::select! {
+            message = rx.recv() => { message }
+            _ = cancellation_token.cancelled() => break };
+
+            if let Ok(msg) = message {
+                let message = serde_json::to_string(&msg).unwrap();
+
+                ws_writer
+                    .send(Message::from(message))
+                    .await
+                    .map_err(|_| DataPipeError::SendMessageFailed)?;
+            } else {
+                break;
+            }
         }
 
-        Ok(())
+        Ok(ws_writer)
     }
 
     async fn try_receive_message(
@@ -212,6 +223,9 @@ impl WebSocketService {
                     let receiver_self = Arc::clone(&this);
                     let writer_self = Arc::clone(&this);
                     let client_registration_self = Arc::clone(&this);
+                    let cancellation_token = CancellationToken::new();
+                    let reader_cancellation_token = cancellation_token.clone();
+                    let writer_cancellation_token = cancellation_token.clone();
 
                     let result = client_registration_self.register_client(&client_id);
                     if result.is_err() {
@@ -227,26 +241,43 @@ impl WebSocketService {
                     let client_id_writer = client_id.clone();
 
                     let (reader, writer) = ws.split();
-                    tokio::task::spawn(async move {
+                    let writer_result = tokio::task::spawn(async move {
                         let self_reference = writer_self.clone();
                         let client_receiver =
                             self_reference.get_receiver_by_client_identifier(&client_id_writer);
 
                         if client_receiver.is_err() {
                             warn!("Client is not registered");
-                            return;
+                            return Ok(writer);
                         }
 
-                        _ = writer_self
-                            .web_socket_writer(client_receiver.unwrap(), writer)
-                            .await;
+                        writer_self
+                            .web_socket_writer(
+                                client_receiver.unwrap(),
+                                writer,
+                                writer_cancellation_token,
+                            )
+                            .await
                     });
+
                     tokio::task::spawn(async move {
                         let sender = receiver_self.sender_out.clone();
                         _ = receiver_self
-                            .web_socket_reader(sender, reader, &client_id_reader)
+                            .web_socket_reader(
+                                sender,
+                                reader,
+                                &client_id_reader,
+                                reader_cancellation_token,
+                            )
                             .await;
                     });
+
+                    cancellation_token.cancelled().await; // Awaiting close sent by ws client
+
+                    let writer_task_result = writer_result.await.unwrap();
+                    if let Ok(writer) = writer_task_result {
+                        this.close_connection_gracefully(writer, &client_id).await;
+                    }
                 }
             })
             .await
@@ -258,6 +289,13 @@ impl WebSocketService {
     }
 
     fn remove_client(self: Arc<Self>, client_id: &str) {
+        {
+            let clients = self.clients.read();
+            if !clients.contains(client_id) {
+                return;
+            }
+        }
+
         info!("Cancelling client subscriptions {} on close", client_id);
         let mut clients = self.clients.write();
         let client = clients.get(client_id).unwrap();
@@ -291,5 +329,18 @@ impl WebSocketService {
             let statistics_for_requests = self.statistics.clone();
             statistics_for_requests.increment_requests_per_second_ws_out();
         }
+    }
+
+    async fn close_connection_gracefully(
+        self: Arc<Self>,
+        mut writer: SplitWriter<Stream<Http1>>,
+        client_id: &str,
+    ) {
+        const DISCONNECTION_NORMALLY_CODE: u16 = 1000;
+        let close_reason =
+            CloseReason::new(DISCONNECTION_NORMALLY_CODE, "Connection closed by client");
+        let _ = writer.send(Message::Close(Some(close_reason))).await;
+        let _ = writer.flush().await;
+        self.remove_client(client_id);
     }
 }
