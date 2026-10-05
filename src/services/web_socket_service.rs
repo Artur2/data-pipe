@@ -93,7 +93,6 @@ impl WebSocketService {
         self: Arc<Self>,
         sender: Sender<DataPipeMessage>,
         mut reader: SplitReader<Stream<Http1>>,
-        client_id: &str,
         cancellation_token: CancellationToken,
     ) -> DataPipeResult<()> {
         while let Some(Ok(msg)) = reader.next().await {
@@ -237,7 +236,6 @@ impl WebSocketService {
                         return;
                     }
 
-                    let client_id_reader = client_id.clone();
                     let client_id_writer = client_id.clone();
 
                     let (reader, writer) = ws.split();
@@ -266,7 +264,6 @@ impl WebSocketService {
                             .web_socket_reader(
                                 sender,
                                 reader,
-                                &client_id_reader,
                                 reader_cancellation_token,
                             )
                             .await;
@@ -336,9 +333,9 @@ impl WebSocketService {
         mut writer: SplitWriter<Stream<Http1>>,
         client_id: &str,
     ) {
-        const DISCONNECTION_NORMALLY_CODE: u16 = 1000;
+        const NORMAL_CLOSURE_CODE: u16 = 1000;
         let close_reason =
-            CloseReason::new(DISCONNECTION_NORMALLY_CODE, "Connection closed by client");
+            CloseReason::new(NORMAL_CLOSURE_CODE, "Connection closed by client");
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
         self.remove_client(client_id);
