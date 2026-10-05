@@ -65,7 +65,6 @@ async fn main() -> DataPipeResult<()> {
 fn create_configuration_factory(
     path_to_configuration_file: Option<String>,
 ) -> DataPipeResult<Box<dyn ConfigurationFactory>> {
-    #[allow(unused_variables)]
     if let Some(path_to_configuration_file) = path_to_configuration_file {
         let toml_configuration_factory =
             TomlConfigurationFactory::new(path_to_configuration_file.to_owned());

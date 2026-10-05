@@ -333,9 +333,8 @@ impl WebSocketService {
         mut writer: SplitWriter<Stream<Http1>>,
         client_id: &str,
     ) {
-        const NORMAL_CLOSURE_CODE: u16 = 1000;
         let close_reason =
-            CloseReason::new(NORMAL_CLOSURE_CODE, "Connection closed by client");
+            CloseReason::new(CloseReason::NORMAL, "Connection closed");
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
         self.remove_client(client_id);
