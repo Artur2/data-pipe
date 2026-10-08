@@ -20,13 +20,15 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
+type DataPipeRateLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
+
 #[allow(dead_code)]
 pub struct WebSocketService {
     configuration: Arc<DataPipeConfiguration>,
     clients: Arc<RwLock<ClientsManager>>,
     sender_out: Sender<DataPipeMessage>,
     statistics: Arc<Statistics>,
-    rate_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    rate_limiter: Arc<DataPipeRateLimiter>,
 }
 
 impl WebSocketService {

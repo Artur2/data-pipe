@@ -68,7 +68,10 @@ impl KafkaService {
             while let Ok(message) = receiver.recv().await {
                 let cloned_stats = cloned_stats.clone();
                 if !message.is_management() {
-                    cloned_stats.increment_request_per_second_kafka_in();
+                    if self.configuration.harvest_statistics {
+                        cloned_stats.increment_request_per_second_kafka_in();
+                    }
+
                     let headers = Self::create_headers(&message);
                     if let Err(_) = &headers {
                         warn!("Kafka message received a message with no headers");
