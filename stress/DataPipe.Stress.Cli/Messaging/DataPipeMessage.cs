@@ -11,5 +11,5 @@ public record DataPipeMessage(
     KeyValuePair<string, string>[] Headers,
     [property: JsonPropertyName("message_type")]
     DataPipeMessageType MessageType,
-    [property: JsonPropertyName("data")] byte[] Data,
+    [property: JsonPropertyName("data")] List<byte> Data,
     [property: JsonPropertyName("topic")] string? Topic);

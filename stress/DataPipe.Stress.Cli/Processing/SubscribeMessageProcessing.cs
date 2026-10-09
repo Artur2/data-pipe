@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using DataPipe.Stress.Cli.Messaging;
 using MessagePack;
+using MessagePack.Resolvers;
 
 namespace DataPipe.Stress.Cli.Processing;
 
@@ -29,7 +30,7 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
         _ = Task.Factory.StartNew(async () =>
         {
             var subscriptionMessage = CreateSubscriptionMessage(topic, groupId, clientId);
-            var serialize = JsonSerializer.Serialize(subscriptionMessage);
+            var serialize = JsonSerializer.Serialize(subscriptionMessage, options);
             var utf8Bytes = Encoding.UTF8.GetBytes(serialize);
             await client.SendAsync(utf8Bytes, WebSocketMessageType.Text, true, cancellationToken);
 
@@ -43,6 +44,11 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
                     while (!isEnd)
                     {
                         var result = await client.ReceiveAsync(buffer, cancellationToken);
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        
                         bytes.AddRange(buffer.Take(result.Count));
                         if (result.EndOfMessage)
                         {
@@ -79,19 +85,20 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
 
     private static DataPipeMessage CreateSubscriptionMessage(string topic, string group, string clientId)
     {
+        var options = MessagePackSerializerOptions.Standard.WithResolver(ContractlessStandardResolver.Instance);
         var messageIdentifier = Guid.NewGuid().ToString();
         var subscriptionInfo = new List<ClientSubscriptionInfo>()
         {
             new(group, topic)
         };
 
-        var serialized = MessagePackSerializer.Serialize(subscriptionInfo);
+        var serialized = MessagePackSerializer.Serialize(subscriptionInfo, options);
 
         var message = new DataPipeMessage(clientId,
             messageIdentifier,
             [],
             DataPipeMessageType.Subscribe,
-            serialized,
+            serialized.ToList(),
             topic);
 
         return message;

@@ -12,7 +12,7 @@ public class RandomMessageFactory
             messageIdentifier,
             [],
             DataPipeMessageType.Default,
-            buffer,
+            buffer.ToList(),
             topic);
 
         return message;
