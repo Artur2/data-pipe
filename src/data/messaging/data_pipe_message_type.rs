@@ -6,6 +6,7 @@ pub enum DataPipeMessageType {
     Default,
     Subscribe,
     Unsubscribe,
+    Ack,
 }
 
 impl std::fmt::Display for DataPipeMessageType {
@@ -19,6 +20,9 @@ impl std::fmt::Display for DataPipeMessageType {
             }
             DataPipeMessageType::Unsubscribe => {
                 write!(f, "{0}", "Unsubscribe")
+            }
+            DataPipeMessageType::Ack => {
+                write!(f, "{0}", "Ack")
             }
         }
     }

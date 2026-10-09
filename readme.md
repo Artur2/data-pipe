@@ -9,7 +9,7 @@ Stress testing implemented using **C#** and plain **System.Net.WebSockets**
  - [ ] Telemetry
  - [ ] Statistics
  - [x] Throttling
- - [ ] Think about transactional processing(in-flight commiting offsets?)
+ - [ ] Think about transactional processing(in-flight commiting using low watermark)
  - [x] Configuration
 
 ### License ###

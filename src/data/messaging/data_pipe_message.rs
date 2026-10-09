@@ -129,6 +129,7 @@ mod tests {
         let subscription_infos = vec![ClientSubscriptionInfo {
             topic: topic.to_owned(),
             group: group.to_owned(),
+            ..Default::default()
         }];
 
         let message = DataPipeMessage::with_subscription(
@@ -155,6 +156,7 @@ mod tests {
         let subscription_infos = vec![ClientSubscriptionInfo {
             topic: topic.to_owned(),
             group: group.to_owned(),
+            ..Default::default()
         }];
 
         let message = DataPipeMessage::with_unsubscribe(
@@ -181,6 +183,7 @@ mod tests {
         let subscription_infos = vec![ClientSubscriptionInfo {
             topic: topic.to_owned(),
             group: group.to_owned(),
+            ..Default::default()
         }];
 
         let message = DataPipeMessage::with_unsubscribe(
