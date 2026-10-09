@@ -7,7 +7,8 @@ using DataPipe.Stress.Cli.Messaging;
 
 namespace DataPipe.Stress.Cli.Processing;
 
-public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory, JsonSerializerOptions options) : IMessageProcessing
+public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory, JsonSerializerOptions options)
+    : IMessageProcessing
 {
     public ProcessingType Type => ProcessingType.Publish;
 
@@ -61,8 +62,6 @@ public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory,
                     cancellationTokenSource.Token);
                 break;
             }
-
-            await Task.Delay(1000, cancellationTokenSource.Token);
         }
     }
 }

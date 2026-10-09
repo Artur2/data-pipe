@@ -4,6 +4,8 @@ using System.Text.Json.Serialization;
 using DataPipe.Stress.Cli.Messaging;
 using DataPipe.Stress.Cli.Options;
 using DataPipe.Stress.Cli.Processing;
+using MessagePack;
+using MessagePack.Resolvers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DataPipe.Stress.Cli;
@@ -16,10 +18,12 @@ public class Program
         var cancellationTokenSource = new CancellationTokenSource();
         serviceCollection.AddScoped<OptionsProvider>();
         serviceCollection.AddScoped<RandomMessageFactory>();
-        serviceCollection.AddScoped<JsonSerializerOptions>(_ => new JsonSerializerOptions
+        serviceCollection.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions
         {
             Converters = {new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)},
         });
+        serviceCollection.AddSingleton<MessagePackSerializerOptions>(_ =>
+            MessagePackSerializerOptions.Standard.WithResolver(ContractlessStandardResolver.Instance));
 
         serviceCollection.AddScoped<IMessageProcessing, PublishMessageProcessing>();
         serviceCollection.AddScoped<IMessageProcessing, SubscribeMessageProcessing>();

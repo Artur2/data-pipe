@@ -5,11 +5,10 @@ using System.Text;
 using System.Text.Json;
 using DataPipe.Stress.Cli.Messaging;
 using MessagePack;
-using MessagePack.Resolvers;
 
 namespace DataPipe.Stress.Cli.Processing;
 
-public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessageProcessing
+public class SubscribeMessageProcessing(JsonSerializerOptions options, MessagePackSerializerOptions messagePackSerializerOptions) : IMessageProcessing
 {
     public ProcessingType Type => ProcessingType.Subscribe;
 
@@ -31,8 +30,12 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
         {
             var subscriptionMessage = CreateSubscriptionMessage(topic, groupId, clientId);
             var serialize = JsonSerializer.Serialize(subscriptionMessage, options);
-            var utf8Bytes = Encoding.UTF8.GetBytes(serialize);
-            await client.SendAsync(utf8Bytes, WebSocketMessageType.Text, true, cancellationToken);
+            var utf8BufferLength = Encoding.UTF8.GetByteCount(serialize);
+            var bufferForSerializedMessage = ArrayPool<byte>.Shared.Rent(utf8BufferLength);
+            Encoding.UTF8.GetBytes(serialize, bufferForSerializedMessage);
+            
+            // Send subscription message
+            await client.SendAsync(bufferForSerializedMessage, WebSocketMessageType.Text, true, cancellationToken);
 
             while (client.State == WebSocketState.Open)
             {
@@ -48,7 +51,7 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
                         {
                             return;
                         }
-                        
+
                         bytes.AddRange(buffer.Take(result.Count));
                         if (result.EndOfMessage)
                         {
@@ -65,6 +68,7 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
                 finally
                 {
                     ArrayPool<byte>.Shared.Return(buffer, true);
+                    ArrayPool<byte>.Shared.Return(bufferForSerializedMessage);
                 }
             }
         }, TaskCreationOptions.LongRunning);
@@ -78,21 +82,18 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options) : IMessag
                     cancellationToken);
                 break;
             }
-
-            await Task.Delay(1000, cancellationToken);
         }
     }
 
-    private static DataPipeMessage CreateSubscriptionMessage(string topic, string group, string clientId)
+    private DataPipeMessage CreateSubscriptionMessage(string topic, string group, string clientId)
     {
-        var options = MessagePackSerializerOptions.Standard.WithResolver(ContractlessStandardResolver.Instance);
         var messageIdentifier = Guid.NewGuid().ToString();
         var subscriptionInfo = new List<ClientSubscriptionInfo>()
         {
             new(group, topic)
         };
 
-        var serialized = MessagePackSerializer.Serialize(subscriptionInfo, options);
+        var serialized = MessagePackSerializer.Serialize(subscriptionInfo, messagePackSerializerOptions);
 
         var message = new DataPipeMessage(clientId,
             messageIdentifier,
