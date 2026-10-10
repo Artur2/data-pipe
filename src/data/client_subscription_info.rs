@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 pub struct ClientSubscriptionInfo {
     pub group: String,
     pub topic: String,
+    #[serde(skip)]
     pub pending_acks: VecDeque<(String, i64)>,
 }
 

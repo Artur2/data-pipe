@@ -39,14 +39,14 @@ impl KafkaService {
         })
     }
 
-    pub fn initialize(self: Arc<Self>, receiver: Receiver<DataPipeMessage>) -> DataPipeResult<()> {
+    pub fn initialize(self: Arc<Self>, receiver: Receiver<Arc<DataPipeMessage>>) -> DataPipeResult<()> {
         _ = self.init_message_processing(receiver);
         Ok(())
     }
 
     fn init_message_processing(
         self: Arc<Self>,
-        mut receiver: Receiver<DataPipeMessage>,
+        mut receiver: Receiver<Arc<DataPipeMessage>>,
     ) -> DataPipeResult<()> {
         tokio::spawn(async move {
             let producer_result = Self::create_producer(
@@ -77,8 +77,9 @@ impl KafkaService {
                         warn!("Kafka message received a message with no headers");
                         return;
                     }
-
-                    let topic = message.topic.unwrap();
+                    
+                    let message_reference = message.clone();
+                    let topic = message_reference.topic.clone().unwrap();
                     let cloned_producer = producer.clone();
                     tokio::spawn(async move {
                         let result = cloned_producer
@@ -110,7 +111,7 @@ impl KafkaService {
         Ok(())
     }
 
-    fn manage_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    fn manage_subscription(self: Arc<Self>, message: Arc<DataPipeMessage>) -> DataPipeResult<()> {
         if message.is_subscribe() {
             self.create_subscription(message)?
         } else if message.is_unsubscribe() {
@@ -120,7 +121,7 @@ impl KafkaService {
         Ok(())
     }
 
-    fn create_subscription(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    fn create_subscription(self: Arc<Self>, message: Arc<DataPipeMessage>) -> DataPipeResult<()> {
         let subscription_info = message.deserialize_subscription_data()?;
         for subscription in subscription_info {
             let cloned_self = self.clone();
@@ -210,7 +211,7 @@ impl KafkaService {
         Ok(())
     }
 
-    fn unsubscribe(self: Arc<Self>, message: DataPipeMessage) -> DataPipeResult<()> {
+    fn unsubscribe(self: Arc<Self>, message: Arc<DataPipeMessage>) -> DataPipeResult<()> {
         let unsubscribe_data = message.deserialize_subscription_data();
 
         for subscription in unsubscribe_data? {

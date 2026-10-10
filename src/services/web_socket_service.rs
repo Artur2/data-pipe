@@ -26,7 +26,7 @@ type DataPipeRateLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 pub struct WebSocketService {
     configuration: Arc<DataPipeConfiguration>,
     clients: Arc<RwLock<ClientsManager>>,
-    sender_out: Sender<DataPipeMessage>,
+    sender_out: Sender<Arc<DataPipeMessage>>,
     statistics: Arc<Statistics>,
     rate_limiter: Arc<DataPipeRateLimiter>,
 }
@@ -37,7 +37,7 @@ impl WebSocketService {
         configuration: Arc<DataPipeConfiguration>,
         statistics: Arc<Statistics>,
     ) -> Arc<Self> {
-        let (sender_out, _) = tokio::sync::broadcast::channel::<DataPipeMessage>(
+        let (sender_out, _) = tokio::sync::broadcast::channel::<Arc<DataPipeMessage>>(
             configuration.ws_outbound_channel_capacity,
         );
 
@@ -63,7 +63,7 @@ impl WebSocketService {
         Ok(())
     }
 
-    pub fn get_receiver(self: Arc<Self>) -> DataPipeResult<Receiver<DataPipeMessage>> {
+    pub fn get_receiver(self: Arc<Self>) -> DataPipeResult<Receiver<Arc<DataPipeMessage>>> {
         Ok(self.sender_out.subscribe())
     }
 
@@ -93,7 +93,7 @@ impl WebSocketService {
     /// Пишет в sender из WS
     async fn web_socket_reader(
         self: Arc<Self>,
-        sender: Sender<DataPipeMessage>,
+        sender: Sender<Arc<DataPipeMessage>>,
         mut reader: SplitReader<Stream<Http1>>,
         cancellation_token: CancellationToken,
     ) -> DataPipeResult<()> {
@@ -164,7 +164,7 @@ impl WebSocketService {
 
     async fn try_receive_message(
         self: Arc<Self>,
-        sender: Sender<DataPipeMessage>,
+        sender: Sender<Arc<DataPipeMessage>>,
         message: String,
     ) -> DataPipeResult<()> {
         if sender.receiver_count() > 0 {
@@ -173,7 +173,8 @@ impl WebSocketService {
                 return Err(DataPipeError::CantParseMessage(message));
             }
 
-            let send_result = sender.send(message_parse_result.unwrap());
+            let message_reference = Arc::new(message_parse_result.unwrap());
+            let send_result = sender.send(message_reference.clone());
             if send_result.is_err() {
                 return Err(DataPipeError::SendMessageFailed);
             }
@@ -263,11 +264,7 @@ impl WebSocketService {
                     tokio::task::spawn(async move {
                         let sender = receiver_self.sender_out.clone();
                         _ = receiver_self
-                            .web_socket_reader(
-                                sender,
-                                reader,
-                                reader_cancellation_token,
-                            )
+                            .web_socket_reader(sender, reader, reader_cancellation_token)
                             .await;
                     });
 
@@ -335,8 +332,7 @@ impl WebSocketService {
         mut writer: SplitWriter<Stream<Http1>>,
         client_id: &str,
     ) {
-        let close_reason =
-            CloseReason::new(CloseReason::NORMAL, "Connection closed");
+        let close_reason = CloseReason::new(CloseReason::NORMAL, "Connection closed");
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
         self.remove_client(client_id);
