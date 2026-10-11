@@ -44,7 +44,7 @@ impl EchoService {
                     warn!("No random client found")
                 }
                 Some(client) => {
-                    let message = create_random_message(client.identifier.clone());
+                    let message = Arc::new(create_random_message(client.identifier.clone()));
                     let _ = client.sender.send(message);
                 }
             };

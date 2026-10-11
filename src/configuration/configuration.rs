@@ -17,6 +17,8 @@ pub struct DataPipeConfiguration {
     pub kafka_session_timeout: String,
     /// Собирать ли статистику
     pub harvest_statistics: bool,
+    /// Отвечать ack при отправке в кафку и помечать offset-ы кафки при отправке клиентам
+    pub ack_mode: bool
 }
 
 impl DataPipeConfiguration {
@@ -42,6 +44,7 @@ impl Default for DataPipeConfiguration {
             kafka_message_send_timeout: "5000".to_owned(),
             kafka_session_timeout: "6000".to_owned(),
             harvest_statistics: false,
+            ack_mode: true,
         }
     }
 }

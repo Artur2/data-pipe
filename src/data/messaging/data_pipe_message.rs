@@ -103,6 +103,17 @@ impl DataPipeMessage {
     pub fn is_management(&self) -> bool {
         self.is_subscribe() || self.is_unsubscribe()
     }
+
+    pub fn clone_for_ack(&self) -> DataPipeResult<DataPipeMessage> {
+        Ok(DataPipeMessage::new(
+            self.client_identifier.clone(),
+            self.message_identifier.clone(),
+            DataPipeMessageType::Ack,
+            vec![],
+            self.topic.clone(),
+            vec![],
+        ))
+    }
 }
 
 impl std::fmt::Display for DataPipeMessage {

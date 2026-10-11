@@ -70,6 +70,9 @@ impl ConfigurationFactory for TomlConfigurationFactory {
         config.harvest_statistics = build.get_bool("harvest_statistics").map_err(|_| {
             DataPipeError::ConfigurationError("Cant parse harvest_statistics".to_owned())
         })?;
+        config.ack_mode = build
+            .get_bool("ack_mode")
+            .map_err(|_| DataPipeError::ConfigurationError("Cant parse ack_mode".to_owned()))?;
 
         Ok(config)
     }

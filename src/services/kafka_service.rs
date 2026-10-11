@@ -39,7 +39,10 @@ impl KafkaService {
         })
     }
 
-    pub fn initialize(self: Arc<Self>, receiver: Receiver<Arc<DataPipeMessage>>) -> DataPipeResult<()> {
+    pub fn initialize(
+        self: Arc<Self>,
+        receiver: Receiver<Arc<DataPipeMessage>>,
+    ) -> DataPipeResult<()> {
         _ = self.init_message_processing(receiver);
         Ok(())
     }
@@ -66,9 +69,10 @@ impl KafkaService {
             let cloned_stats = self.statistics.clone();
 
             while let Ok(message) = receiver.recv().await {
-                let cloned_stats = cloned_stats.clone();
                 if !message.is_management() {
-                    if self.configuration.harvest_statistics {
+                    let cloned_self = self.clone();
+                    if cloned_self.configuration.harvest_statistics {
+                        let cloned_stats = cloned_stats.clone();
                         cloned_stats.increment_request_per_second_kafka_in();
                     }
 
@@ -77,7 +81,7 @@ impl KafkaService {
                         warn!("Kafka message received a message with no headers");
                         return;
                     }
-                    
+
                     let message_reference = message.clone();
                     let topic = message_reference.topic.clone().unwrap();
                     let cloned_producer = producer.clone();
@@ -94,6 +98,14 @@ impl KafkaService {
 
                         if result.is_err() {
                             warn!("Kafka message produced error: {:?}", result.err().unwrap());
+                        } else if cloned_self.configuration.ack_mode {
+                            let clients = cloned_self.clients.read();
+                            let client = clients.get(&message.client_identifier);
+                            if let Some(client) = client {
+                                let ack_message =
+                                    Arc::new(message_reference.clone_for_ack().unwrap());
+                                _ = client.sender.send(ack_message);
+                            }
                         }
                     });
                 } else {
@@ -171,14 +183,14 @@ impl KafkaService {
 
                         if let Some(client) = found_client {
                             let message_id = uuid::Uuid::new_v4().to_string();
-                            let data_pipe_message = DataPipeMessage::new(
+                            let data_pipe_message = Arc::new(DataPipeMessage::new(
                                 client_identifier.to_owned(),
                                 message_id,
                                 DataPipeMessageType::Default,
                                 message_data.to_vec(),
                                 Some(message.topic().to_owned()),
                                 vec![],
-                            );
+                            ));
                             let send_result = client.sender.send(data_pipe_message);
                             if send_result.is_err() {
                                 warn!("Kafka client send error");

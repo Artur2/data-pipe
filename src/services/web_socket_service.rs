@@ -13,6 +13,7 @@ use parking_lot::RwLock;
 use sockudo_ws::error::CloseReason;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
 use std::num::NonZeroU32;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -70,7 +71,7 @@ impl WebSocketService {
     fn get_receiver_by_client_identifier(
         self: Arc<Self>,
         identifier: &String,
-    ) -> DataPipeResult<Receiver<DataPipeMessage>> {
+    ) -> DataPipeResult<Receiver<Arc<DataPipeMessage>>> {
         let clients = self.clients.read();
         if !clients.contains(identifier) {
             return Err(DataPipeError::ClientNotFound);
@@ -136,7 +137,7 @@ impl WebSocketService {
     /// Пишет из receiver в ws
     async fn web_socket_writer(
         self: Arc<Self>,
-        mut rx: Receiver<DataPipeMessage>,
+        mut rx: Receiver<Arc<DataPipeMessage>>,
         mut ws_writer: SplitWriter<Stream<Http1>>,
         cancellation_token: CancellationToken,
     ) -> DataPipeResult<SplitWriter<Stream<Http1>>> {
@@ -148,7 +149,7 @@ impl WebSocketService {
             _ = cancellation_token.cancelled() => break };
 
             if let Ok(msg) = message {
-                let message = serde_json::to_string(&msg).unwrap();
+                let message = serde_json::to_string(&msg.deref()).unwrap();
 
                 ws_writer
                     .send(Message::from(message))
