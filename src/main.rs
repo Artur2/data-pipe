@@ -54,7 +54,7 @@ async fn main() -> DataPipeResult<()> {
             .read_line(&mut input)
             .map_err(|_| DataPipeError::Unknown)?;
 
-        if input.trim() == "c" {
+        if input.trim() == "q" {
             break;
         }
     }

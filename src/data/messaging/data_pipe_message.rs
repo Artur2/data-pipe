@@ -5,6 +5,7 @@ use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::fmt::Formatter;
+use bytes::Bytes;
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DataPipeMessage {
@@ -12,17 +13,17 @@ pub struct DataPipeMessage {
     pub message_identifier: String,
     pub headers: Vec<DataPipeMessageHeader>,
     pub message_type: DataPipeMessageType,
-    #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>,
+    pub data: Bytes,
     pub topic: Option<String>,
 }
 
+#[allow(dead_code)]
 impl DataPipeMessage {
     pub fn new(
         client_identifier: String,
         message_identifier: String,
         message_type: DataPipeMessageType,
-        data: Vec<u8>,
+        data: Bytes,
         topic: Option<String>,
         headers: Vec<DataPipeMessageHeader>,
     ) -> Self {
@@ -56,11 +57,13 @@ impl DataPipeMessage {
             .serialize(&mut Serializer::new(&mut buffer))
             .map_err(|_| DataPipeError::SerializationError)?;
 
+        let bytes = Bytes::from(buffer);
+
         Ok(DataPipeMessage {
             client_identifier,
             message_identifier,
             message_type: DataPipeMessageType::Subscribe,
-            data: buffer,
+            data: bytes,
             topic,
             headers,
         })
@@ -78,11 +81,13 @@ impl DataPipeMessage {
             .serialize(&mut Serializer::new(&mut buffer))
             .map_err(|_| DataPipeError::SerializationError)?;
 
+        let bytes = Bytes::from(buffer);
+
         Ok(DataPipeMessage {
             client_identifier,
             message_identifier,
             message_type: DataPipeMessageType::Unsubscribe,
-            data: buffer,
+            data: bytes,
             topic,
             headers,
         })
@@ -109,7 +114,7 @@ impl DataPipeMessage {
             self.client_identifier.clone(),
             self.message_identifier.clone(),
             DataPipeMessageType::Ack,
-            vec![],
+            Bytes::new(),
             self.topic.clone(),
             vec![],
         ))
@@ -227,7 +232,7 @@ mod tests {
             client_identifier.to_owned(),
             message_identifier.to_owned(),
             DataPipeMessageType::Default,
-            vec![],
+            Bytes::new(),
             None,
             vec![],
         );
@@ -248,7 +253,7 @@ mod tests {
             client_identifier.to_owned(),
             message_identifier.to_owned(),
             DataPipeMessageType::Default,
-            buffer.to_vec(),
+            Bytes::from_owner(buffer),
             Some("test".to_owned()),
             vec![],
         );

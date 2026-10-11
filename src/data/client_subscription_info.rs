@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct ClientSubscriptionInfo {
     pub group: String,
     pub topic: String,

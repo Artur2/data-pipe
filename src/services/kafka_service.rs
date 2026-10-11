@@ -15,6 +15,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::{ClientConfig, Message};
 use std::sync::Arc;
 use std::time::Duration;
+use bytes::Bytes;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
 
@@ -89,7 +90,7 @@ impl KafkaService {
                         let result = cloned_producer
                             .send(
                                 FutureRecord::to(&topic)
-                                    .payload(&message.data)
+                                    .payload(message.data.as_ref())
                                     .key(&message.message_identifier)
                                     .headers(headers.unwrap()),
                                 Duration::from_secs(1),
@@ -187,7 +188,7 @@ impl KafkaService {
                                 client_identifier.to_owned(),
                                 message_id,
                                 DataPipeMessageType::Default,
-                                message_data.to_vec(),
+                                Bytes::copy_from_slice(message_data),
                                 Some(message.topic().to_owned()),
                                 vec![],
                             ));

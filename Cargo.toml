@@ -30,5 +30,6 @@ rdkafka = "0.39.0"
 tokio-util = { version = "0.7.19", features = ["rt"] }
 futures-util = { version = "0.3", default-features = false }
 governor = "0.10.4"
-config = { version =  "0.15.27", features = ["toml"] }
+config = { version = "0.15.27", features = ["toml"] }
 clap = { version = "4.6.7", features = ["derive"] }
+bytes = { version = "1.12.1", features = ["serde"] }

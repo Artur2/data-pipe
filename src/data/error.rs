@@ -14,8 +14,6 @@ pub enum DataPipeError {
     SendMessageFailed,
     #[error("Cant bind to specified port/host")]
     CantBind,
-    #[error("Cant connect to specified port/host")]
-    CantConnect,
     #[error("Task execution error: {0}")]
     TaskError(String),
     #[error("Cant identify client: {0}")]
