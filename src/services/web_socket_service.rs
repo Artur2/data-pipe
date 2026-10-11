@@ -5,6 +5,7 @@ use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::metrics::statistics::Statistics;
+use bytes::Bytes;
 use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
@@ -106,19 +107,7 @@ impl WebSocketService {
                     cloned_self.write_per_message_statistics();
                     cloned_rate_limiter.until_ready().await;
 
-                    let text_as_string =
-                        String::from_utf8(text.to_vec()).map_err(|_| DataPipeError::Unknown);
-
-                    if text_as_string.is_err() {
-                        warn!("Can't parse text from websocket message");
-                        continue;
-                    }
-
-                    match self
-                        .clone()
-                        .try_receive_message(sender.clone(), text_as_string?)
-                        .await
-                    {
+                    match self.clone().try_receive_message(sender.clone(), text).await {
                         Err(e) => {
                             warn!("Can't receive message, reason {}", e);
                             continue;
@@ -166,11 +155,12 @@ impl WebSocketService {
     async fn try_receive_message(
         self: Arc<Self>,
         sender: Sender<Arc<DataPipeMessage>>,
-        message: String,
+        message: Bytes,
     ) -> DataPipeResult<()> {
         if sender.receiver_count() > 0 {
-            let message_parse_result = serde_json::from_str::<DataPipeMessage>(&message);
+            let message_parse_result = serde_json::from_slice::<DataPipeMessage>(&message);
             if message_parse_result.is_err() {
+                let message = String::from_utf8(message.to_vec()).unwrap();
                 return Err(DataPipeError::CantParseMessage(message));
             }
 
