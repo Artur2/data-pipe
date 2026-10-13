@@ -1,7 +1,8 @@
 use crate::data::client::Client;
 use crate::data::client_cancellation_holder::ClientCancellationHolder;
-use crate::data::client_subscription_info::ClientSubscriptionInfo;
+use crate::data::client_tracking_info::ClientTrackingInfo;
 use crate::data::error::{DataPipeError, DataPipeResult};
+use crate::data::messaging::client_subscription_info::ClientSubscriptionInfo;
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh32;
@@ -30,7 +31,7 @@ impl ClientsManager {
         Ok(())
     }
 
-    pub fn add_subscription(
+    pub fn add_tracking_info(
         &mut self,
         identifier: &str,
         client_subscription: ClientSubscriptionInfo,
@@ -49,11 +50,14 @@ impl ClientsManager {
             ClientCancellationHolder::new(identifier.to_owned(), CancellationToken::new()),
         );
 
-        client.subscription_infos.push(client_subscription);
+        client.tracking_infos.push(ClientTrackingInfo::new(
+            client_subscription.group,
+            client_subscription.topic,
+        ));
         Ok(())
     }
 
-    pub fn remove_subscription(
+    pub fn remove_tracking_info(
         &mut self,
         identifier: &str,
         topic: &str,
@@ -67,13 +71,13 @@ impl ClientsManager {
         self.lookup.remove(&key);
         let client = self.clients.get_mut(identifier).unwrap();
         client
-            .subscription_infos
+            .tracking_infos
             .retain(|sub| &sub.topic != topic && &sub.group != group);
 
         Ok(())
     }
 
-    pub fn contains_subscription(&self, topic: &str, group: &str) -> bool {
+    pub fn contains_tracking_info(&self, topic: &str, group: &str) -> bool {
         let key = self.compute_hash(topic, group);
         self.lookup.contains_key(&key)
     }
@@ -135,7 +139,7 @@ mod tests {
         let identifier = "test";
         _ = client.add(identifier, Client::new(identifier.to_owned(), 200));
 
-        _ = client.add_subscription(
+        _ = client.add_tracking_info(
             &identifier.to_owned(),
             ClientSubscriptionInfo::new("topic".to_owned(), "group".to_owned()),
         );
@@ -158,11 +162,11 @@ mod tests {
         let group = "group";
         _ = client.add(identifier, Client::new(identifier.to_owned(), 200));
 
-        _ = client.add_subscription(
+        _ = client.add_tracking_info(
             &identifier,
             ClientSubscriptionInfo::new(topic.to_owned(), group.to_owned()),
         );
-        let result = client.add_subscription(
+        let result = client.add_tracking_info(
             &identifier,
             ClientSubscriptionInfo::new(topic.to_owned(), group.to_owned()),
         );

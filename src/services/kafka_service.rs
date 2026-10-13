@@ -1,11 +1,12 @@
 use crate::configuration::configuration::DataPipeConfiguration;
-use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::kafka::default_context::{DefaultConsumer, DefaultContext};
+use crate::data::messaging::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
 use crate::metrics::statistics::Statistics;
+use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{info, warn};
 use parking_lot::RwLock;
@@ -15,7 +16,6 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::{ClientConfig, Message};
 use std::sync::Arc;
 use std::time::Duration;
-use bytes::Bytes;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
 
@@ -141,7 +141,7 @@ impl KafkaService {
             let client_identifier = message.client_identifier.clone();
             tokio::task::spawn(async move {
                 info!("Creating subscription for {}", &client_identifier);
-                let cancellation_token = cloned_self.create_client_subscription_info_with_token(
+                let cancellation_token = cloned_self.create_client_tracking_info_with_token(
                     &client_identifier,
                     &subscription.topic,
                     &subscription.group,
@@ -239,7 +239,7 @@ impl KafkaService {
             }
 
             let mut clients = self.clients.write();
-            _ = clients.remove_subscription(
+            _ = clients.remove_tracking_info(
                 &message.client_identifier,
                 &subscription.topic,
                 &subscription.group,
@@ -290,14 +290,14 @@ impl KafkaService {
         consumer_result.map_err(|e| DataPipeError::ConsumerCreationError(e.to_string()))
     }
 
-    fn create_client_subscription_info_with_token(
+    fn create_client_tracking_info_with_token(
         &self,
         client_identifier: &str,
         topic: &str,
         group: &str,
     ) -> CancellationToken {
         let mut clients = self.clients.write();
-        let _ = clients.add_subscription(
+        let _ = clients.add_tracking_info(
             client_identifier,
             ClientSubscriptionInfo::new(topic.to_owned(), group.to_owned()),
         );

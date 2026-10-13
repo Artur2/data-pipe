@@ -1,11 +1,11 @@
-use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::error::{DataPipeError, DataPipeResult};
+use crate::data::messaging::client_subscription_info::ClientSubscriptionInfo;
 use crate::data::messaging::data_pipe_message_header::DataPipeMessageHeader;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
+use bytes::Bytes;
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::fmt::Formatter;
-use bytes::Bytes;
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DataPipeMessage {

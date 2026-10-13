@@ -1,12 +1,8 @@
-use std::collections::VecDeque;
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct ClientSubscriptionInfo {
     pub group: String,
-    pub topic: String,
-    #[serde(skip)]
-    pub pending_acks: VecDeque<(String, i64)>,
+    pub topic: String
 }
 
 impl ClientSubscriptionInfo {
@@ -14,7 +10,6 @@ impl ClientSubscriptionInfo {
         ClientSubscriptionInfo {
             group,
             topic,
-            pending_acks: VecDeque::new(),
         }
     }
 }

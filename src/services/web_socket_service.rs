@@ -286,7 +286,7 @@ impl WebSocketService {
         info!("Cancelling client subscriptions {} on close", client_id);
         let mut clients = self.clients.write();
         let client = clients.get(client_id).unwrap();
-        for subscription_info in &client.subscription_infos {
+        for subscription_info in &client.tracking_infos {
             let client_holder = clients
                 .get_client_cancellation_holder(&subscription_info.topic, &subscription_info.group);
             let token = &client_holder.unwrap().token;

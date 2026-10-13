@@ -1,8 +1,8 @@
+use crate::data::client_tracking_info::ClientTrackingInfo;
+use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use std::sync::Arc;
-use crate::data::client_subscription_info::ClientSubscriptionInfo;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
-use crate::data::messaging::data_pipe_message::DataPipeMessage;
 
 /// Основная структура, по которой будет роутинг сообщений\
 /// Когда сообщение приходит из Kafka, мы смотрим клиентов и отправляем сообщения по найденому
@@ -10,7 +10,7 @@ use crate::data::messaging::data_pipe_message::DataPipeMessage;
 pub struct Client {
     pub identifier: String,
     pub sender: Sender<Arc<DataPipeMessage>>,
-    pub subscription_infos: Vec<ClientSubscriptionInfo>,
+    pub tracking_infos: Vec<ClientTrackingInfo>,
 }
 
 impl Client {
@@ -19,7 +19,7 @@ impl Client {
         Client {
             identifier,
             sender,
-            subscription_infos: vec![],
+            tracking_infos: vec![],
         }
     }
 }

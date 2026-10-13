@@ -1,7 +1,7 @@
 pub(crate) mod client;
-pub(crate) mod client_subscription_info;
 pub(crate) mod clients_manager;
 pub(crate) mod error;
 pub(crate) mod messaging;
 pub(crate) mod kafka;
 pub(crate) mod client_cancellation_holder;
+pub(crate) mod client_tracking_info;
