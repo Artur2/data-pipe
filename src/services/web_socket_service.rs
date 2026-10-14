@@ -160,8 +160,10 @@ impl WebSocketService {
         if sender.receiver_count() > 0 {
             let message_parse_result = serde_json::from_slice::<DataPipeMessage>(&message);
             if message_parse_result.is_err() {
-                let message = String::from_utf8(message.to_vec()).unwrap();
-                return Err(DataPipeError::CantParseMessage(message));
+                return Err(DataPipeError::CantParseMessage(format!(
+                    "error: {:?}",
+                    message_parse_result.err().unwrap()
+                )));
             }
 
             let message_reference = Arc::new(message_parse_result.unwrap());

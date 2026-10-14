@@ -32,6 +32,8 @@ pub enum DataPipeError {
     ConsumerCreationError(String),
     #[error("Cant configure, reason - {0}")]
     ConfigurationError(String),
+    #[error("Cant find offset")]
+    OffsetNotFound
 }
 
 pub type DataPipeResult<T> = Result<T, DataPipeError>;

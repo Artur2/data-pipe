@@ -15,6 +15,7 @@ pub struct DataPipeMessage {
     pub message_type: DataPipeMessageType,
     pub data: Bytes,
     pub topic: Option<String>,
+    pub group: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -26,6 +27,7 @@ impl DataPipeMessage {
         data: Bytes,
         topic: Option<String>,
         headers: Vec<DataPipeMessageHeader>,
+        group: Option<String>,
     ) -> Self {
         DataPipeMessage {
             client_identifier,
@@ -34,6 +36,7 @@ impl DataPipeMessage {
             data,
             topic,
             headers,
+            group
         }
     }
 
@@ -45,11 +48,14 @@ impl DataPipeMessage {
         self.message_type == DataPipeMessageType::Unsubscribe
     }
 
+    pub fn is_ack(&self) -> bool {
+        self.message_type == DataPipeMessageType::Ack
+    }
+
     pub fn with_subscription(
         client_identifier: String,
         message_identifier: String,
         subscription_infos: &[ClientSubscriptionInfo],
-        topic: Option<String>,
         headers: Vec<DataPipeMessageHeader>,
     ) -> DataPipeResult<Self> {
         let mut buffer = vec![];
@@ -64,8 +70,9 @@ impl DataPipeMessage {
             message_identifier,
             message_type: DataPipeMessageType::Subscribe,
             data: bytes,
-            topic,
+            topic: None,
             headers,
+            group: None,
         })
     }
 
@@ -73,7 +80,6 @@ impl DataPipeMessage {
         client_identifier: String,
         message_identifier: String,
         subscription_infos: &[ClientSubscriptionInfo],
-        topic: Option<String>,
         headers: Vec<DataPipeMessageHeader>,
     ) -> DataPipeResult<Self> {
         let mut buffer = vec![];
@@ -88,8 +94,9 @@ impl DataPipeMessage {
             message_identifier,
             message_type: DataPipeMessageType::Unsubscribe,
             data: bytes,
-            topic,
+            topic: None,
             headers,
+            group: None,
         })
     }
 
@@ -117,6 +124,7 @@ impl DataPipeMessage {
             Bytes::new(),
             self.topic.clone(),
             vec![],
+            self.group.clone(),
         ))
     }
 }
@@ -152,7 +160,6 @@ mod tests {
             client_identifier.to_owned(),
             message_identifier.to_owned(),
             &subscription_infos,
-            None,
             vec![],
         );
 
@@ -179,7 +186,6 @@ mod tests {
             client_identifier.to_owned(),
             message_identifier.to_owned(),
             &subscription_infos,
-            None,
             vec![],
         );
 
@@ -206,7 +212,6 @@ mod tests {
             client_identifier.to_owned(),
             message_identifier.to_owned(),
             &subscription_infos,
-            None,
             vec![],
         );
 
@@ -235,6 +240,7 @@ mod tests {
             Bytes::new(),
             None,
             vec![],
+            None,
         );
 
         let result = message.deserialize_subscription_data();
@@ -256,6 +262,7 @@ mod tests {
             Bytes::from_owner(buffer),
             Some("test".to_owned()),
             vec![],
+            None
         );
 
         let raw_string = serde_json::to_string(&message).unwrap();
@@ -275,8 +282,7 @@ mod tests {
                 "test".to_owned(),
                 "test".to_owned(),
             )],
-            Some("test".to_owned()),
-            vec![],
+            vec![]
         )
         .unwrap();
 

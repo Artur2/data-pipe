@@ -24,6 +24,7 @@ public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory,
         var uri = uriBuilder.Uri;
         var sleep = parsedResult.GetRequiredValue<int>(Constants.SleepOption);
         var topic = parsedResult.GetRequiredValue<string>(Constants.TopicOption);
+        var groupId = parsedResult.GetRequiredValue<string>(Constants.GroupIdOption);
 
         await client.ConnectAsync(uri, cancellationTokenSource.Token);
 
@@ -31,17 +32,25 @@ public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory,
         {
             while (client.State == WebSocketState.Open)
             {
+                var ackMessageBuffer = ArrayPool<byte>.Shared.Rent(1024 * 10);
+
                 var dataBuffer = ArrayPool<byte>.Shared.Rent(1024);
-                var randomMessage = randomMessageFactory.CreateMessage(clientId, topic, dataBuffer);
+                var randomMessage = randomMessageFactory.CreateMessage(clientId, topic, groupId, dataBuffer);
                 var serializedMessage = JsonSerializer.Serialize(randomMessage, options);
                 var utf8BufferLength = Encoding.UTF8.GetByteCount(serializedMessage);
                 var bufferForSerializedMessage = ArrayPool<byte>.Shared.Rent(utf8BufferLength);
                 try
                 {
                     Encoding.UTF8.GetBytes(serializedMessage, bufferForSerializedMessage);
-                    var memoryBlock = bufferForSerializedMessage.AsMemory(0, utf8BufferLength);
+                    ReadOnlyMemory<byte> memoryBlock = bufferForSerializedMessage.AsMemory(0, utf8BufferLength);
                     await client.SendAsync(memoryBlock, WebSocketMessageType.Text, true,
                         cancellationTokenSource.Token);
+
+                    var readingResult = await client.ReceiveAsync(ackMessageBuffer, cancellationToken);
+                    var message =
+                        JsonSerializer.Deserialize<DataPipeMessage>(ackMessageBuffer.AsSpan(0, readingResult.Count),
+                            options);
+                    Console.WriteLine($"Message received: {message.MessageIdentifier}, type: {message.MessageType}");
 
                     await Task.Delay(sleep, cancellationTokenSource.Token);
                 }
@@ -49,6 +58,7 @@ public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory,
                 {
                     ArrayPool<byte>.Shared.Return(dataBuffer);
                     ArrayPool<byte>.Shared.Return(bufferForSerializedMessage, true);
+                    ArrayPool<byte>.Shared.Return(ackMessageBuffer, true);
                 }
             }
         }, TaskCreationOptions.LongRunning);

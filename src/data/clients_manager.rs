@@ -1,6 +1,6 @@
 use crate::data::client::Client;
 use crate::data::client_cancellation_holder::ClientCancellationHolder;
-use crate::data::client_tracking_info::ClientTrackingInfo;
+use crate::data::client_tracking_info::{ClientTrackingData, ClientTrackingInfo};
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::client_subscription_info::ClientSubscriptionInfo;
 use std::collections::HashMap;
@@ -120,6 +120,79 @@ impl ClientsManager {
         }
     }
 
+    pub fn add_in_flight_offset(
+        &mut self,
+        identifier: &str,
+        topic: &str,
+        group: &str,
+        offset: i64,
+        message_identifier: &str,
+        partition: u16,
+    ) -> DataPipeResult<()> {
+        let client = self.clients.get_mut(identifier).unwrap();
+        let tracking_info_raw = client
+            .tracking_infos
+            .iter_mut()
+            .find(|x| x.topic == topic && x.group == group);
+        if let None = tracking_info_raw {
+            return Err(DataPipeError::ClientNotFound);
+        }
+
+        let tracking_data =
+            ClientTrackingData::new(message_identifier.to_owned(), offset, false, partition);
+        let tracking_info = tracking_info_raw.unwrap();
+        tracking_info.processing_acks.push_back(tracking_data);
+
+        Ok(())
+    }
+
+    /// Returns offset and partition
+    pub fn compute_offset_to_commit(
+        &mut self,
+        identifier: &str,
+        topic: &str,
+        group: &str,
+        message_identifier: &str,
+    ) -> DataPipeResult<(i64, u16)> {
+        let mut committable_offset = None;
+        let mut partition_id = None;
+        let client = self.clients.get_mut(identifier).unwrap();
+        let tracking_info_raw = client
+            .tracking_infos
+            .iter_mut()
+            .find(|x| x.topic == topic && x.group == group);
+        if let None = tracking_info_raw {
+            return Err(DataPipeError::ClientNotFound);
+        }
+
+        let tracking_info = tracking_info_raw.unwrap();
+
+        for processing_ack in tracking_info.processing_acks.iter_mut() {
+            if processing_ack.message_id == message_identifier {
+                processing_ack.acked = true;
+                break;
+            }
+        }
+
+        while let Some(info) = tracking_info.processing_acks.front() {
+            if info.acked {
+                // Take the value while popping the element out of the VecDeque
+                if let Some(popped_info) = tracking_info.processing_acks.pop_front() {
+                    committable_offset = Some(popped_info.offset);
+                    partition_id = Some(popped_info.partition);
+                }
+            } else {
+                break;
+            }
+        }
+
+        if let (Some(committed), Some(partition_id)) = (committable_offset, partition_id) {
+            Ok((committed, partition_id))
+        } else {
+            Err(DataPipeError::OffsetNotFound)
+        }
+    }
+
     fn compute_hash(&self, topic: &str, group: &str) -> u32 {
         let mut hasher = xxh32::Xxh32::new(0);
         hasher.update(topic.as_bytes());
@@ -171,5 +244,30 @@ mod tests {
             ClientSubscriptionInfo::new(topic.to_owned(), group.to_owned()),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    pub fn remove_tracking_info_should_not_fail() {
+        let mut client = ClientsManager::new();
+
+        let identifier = "test";
+        let topic = "topic";
+        let group = "group";
+        _ = client.add(identifier, Client::new(identifier.to_owned(), 200));
+
+        let result = client.add_tracking_info(
+            &identifier,
+            ClientSubscriptionInfo::new(topic.to_owned(), group.to_owned()),
+        );
+
+        assert!(result.is_ok());
+
+        let mut remove_result = client.remove_tracking_info(&identifier, &topic, &group);
+
+        assert!(remove_result.is_ok());
+
+        remove_result = client.remove_tracking_info(&identifier, &topic, &group);
+
+        assert!(remove_result.is_ok());
     }
 }

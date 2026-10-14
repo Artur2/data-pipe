@@ -8,7 +8,9 @@ using MessagePack;
 
 namespace DataPipe.Stress.Cli.Processing;
 
-public class SubscribeMessageProcessing(JsonSerializerOptions options, MessagePackSerializerOptions messagePackSerializerOptions) : IMessageProcessing
+public class SubscribeMessageProcessing(
+    JsonSerializerOptions options,
+    MessagePackSerializerOptions messagePackSerializerOptions) : IMessageProcessing
 {
     public ProcessingType Type => ProcessingType.Subscribe;
 
@@ -33,14 +35,15 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options, MessagePa
             var utf8BufferLength = Encoding.UTF8.GetByteCount(serialize);
             var bufferForSerializedMessage = ArrayPool<byte>.Shared.Rent(utf8BufferLength);
             Encoding.UTF8.GetBytes(serialize, bufferForSerializedMessage);
-            
+
             // Send subscription message
-            await client.SendAsync(bufferForSerializedMessage, WebSocketMessageType.Text, true, cancellationToken);
+            await client.SendAsync(bufferForSerializedMessage.AsMemory(0, utf8BufferLength), WebSocketMessageType.Text, true, cancellationToken);
 
             while (client.State == WebSocketState.Open)
             {
                 var bytes = new List<byte>();
                 var buffer = ArrayPool<byte>.Shared.Rent(1024 * 10);
+                var ackMessageBuffer = ArrayPool<byte>.Shared.Rent(1024 * 10);
                 try
                 {
                     var isEnd = false;
@@ -63,12 +66,21 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options, MessagePa
                     if (deserializedMessage != null)
                     {
                         Console.WriteLine($"Received message: {deserializedMessage.MessageIdentifier}");
+                        var ackMessage = CreateAckMessage(deserializedMessage.ClientIdentifier,
+                            deserializedMessage.MessageIdentifier, topic, groupId);
+
+                        var serialized = JsonSerializer.Serialize(ackMessage, options);
+                        var bytesCount = Encoding.UTF8.GetByteCount(serialized);
+                        Encoding.UTF8.GetBytes(serialized, ackMessageBuffer);
+                        await client.SendAsync(ackMessageBuffer.AsMemory(0, bytesCount), WebSocketMessageType.Text,
+                            true, cancellationToken);
                     }
                 }
                 finally
                 {
                     ArrayPool<byte>.Shared.Return(buffer, true);
                     ArrayPool<byte>.Shared.Return(bufferForSerializedMessage);
+                    ArrayPool<byte>.Shared.Return(ackMessageBuffer, true);
                 }
             }
         }, TaskCreationOptions.LongRunning);
@@ -100,8 +112,16 @@ public class SubscribeMessageProcessing(JsonSerializerOptions options, MessagePa
             [],
             DataPipeMessageType.Subscribe,
             serialized.ToList(),
-            topic);
+            topic, group);
 
         return message;
     }
+
+    private DataPipeMessage CreateAckMessage(string clientId, string messageId, string topic, string group) =>
+        new(clientId,
+            messageId,
+            [],
+            DataPipeMessageType.Ack,
+            [],
+            topic, group);
 }

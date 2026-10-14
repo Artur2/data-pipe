@@ -2,7 +2,7 @@ namespace DataPipe.Stress.Cli.Messaging;
 
 public class RandomMessageFactory
 {
-    public DataPipeMessage CreateMessage(string clientId, string topic, byte[] buffer)
+    public DataPipeMessage CreateMessage(string clientId, string topic, string group, byte[] buffer)
     {
         var messageIdentifier = Guid.NewGuid().ToString();
         var rng = new Random();
@@ -13,7 +13,8 @@ public class RandomMessageFactory
             [],
             DataPipeMessageType.Default,
             buffer.ToList(),
-            topic);
+            topic,
+            group);
 
         return message;
     }

@@ -9,5 +9,7 @@ public enum DataPipeMessageType
     [JsonStringEnumMemberName(nameof(Subscribe))]
     Subscribe,
     [JsonStringEnumMemberName(nameof(Unsubscribe))]
-    Unsubscribe
+    Unsubscribe,
+    [JsonStringEnumMemberName(nameof(Ack))]
+    Ack
 }

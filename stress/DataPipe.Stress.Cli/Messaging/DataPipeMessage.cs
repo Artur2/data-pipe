@@ -12,4 +12,5 @@ public record DataPipeMessage(
     [property: JsonPropertyName("message_type")]
     DataPipeMessageType MessageType,
     [property: JsonPropertyName("data")] List<byte> Data,
-    [property: JsonPropertyName("topic")] string? Topic);
+    [property: JsonPropertyName("topic")] string? Topic,
+    [property: JsonPropertyName("group")] string? Group);

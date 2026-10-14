@@ -13,16 +13,19 @@ use parking_lot::RwLock;
 use rdkafka::consumer::{CommitMode, Consumer};
 use rdkafka::message::{Header, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use rdkafka::{ClientConfig, Message};
+use rdkafka::{ClientConfig, Message, Offset, TopicPartitionList};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
+use xxhash_rust::xxh32;
 
 pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
     configuration: Arc<DataPipeConfiguration>,
     statistics: Arc<Statistics>,
+    consumers: RwLock<HashMap<i32, Arc<DefaultConsumer>>>,
 }
 
 type ProducerResult = Result<FutureProducer, DataPipeError>;
@@ -33,10 +36,12 @@ impl KafkaService {
         configuration: Arc<DataPipeConfiguration>,
         statistics: Arc<Statistics>,
     ) -> Arc<KafkaService> {
+        let consumers = RwLock::new(HashMap::new());
         Arc::new(KafkaService {
             clients,
             configuration,
             statistics,
+            consumers,
         })
     }
 
@@ -70,8 +75,8 @@ impl KafkaService {
             let cloned_stats = self.statistics.clone();
 
             while let Ok(message) = receiver.recv().await {
-                if !message.is_management() {
-                    let cloned_self = self.clone();
+                let cloned_self = self.clone();
+                if !message.is_management() && !message.is_ack() {
                     if cloned_self.configuration.harvest_statistics {
                         let cloned_stats = cloned_stats.clone();
                         cloned_stats.increment_request_per_second_kafka_in();
@@ -109,11 +114,45 @@ impl KafkaService {
                             }
                         }
                     });
-                } else {
+                } else if message.is_management() {
                     let cloned_self = self.clone();
                     let result = cloned_self.manage_subscription(message);
                     if result.is_err() {
                         warn!("Management process error: {:?}", result);
+                    }
+                } else if message.is_ack() {
+                    let mut clients = cloned_self.clients.write();
+
+                    if message.topic.is_none() || message.group.is_none() {
+                        warn!("Kafka message received an empty topic or group");
+                        continue;
+                    }
+
+                    let topic = message.topic.as_ref().unwrap();
+                    let group = message.group.as_ref().unwrap();
+
+                    let compute_result = clients.compute_offset_to_commit(
+                        &message.client_identifier,
+                        &topic,
+                        &group,
+                        &message.message_identifier,
+                    );
+
+                    if compute_result.is_ok() {
+                        let (offset, partition) = compute_result.unwrap();
+                        let hash = Self::create_hash(&message.client_identifier, &topic, &group);
+
+                        let consumers = cloned_self.consumers.read();
+                        let consumer = consumers.get(&hash);
+                        if let Some(consumer) = consumer {
+                            let mut tpl = TopicPartitionList::new();
+                            _ = tpl.add_partition_offset(
+                                &topic,
+                                partition as i32,
+                                Offset::Offset(offset),
+                            );
+                            consumer.commit(&tpl, CommitMode::Async).unwrap();
+                        }
                     }
                 }
             }
@@ -159,8 +198,20 @@ impl KafkaService {
                 }
 
                 let consumer: DefaultConsumer = consumer_result.unwrap();
-                _ = consumer.subscribe(&[&subscription.topic]);
-                let mut stream = consumer.stream();
+                let consumer_clone = Arc::new(consumer);
+                let consumer_holder = consumer_clone.clone();
+                _ = consumer_clone.subscribe(&[&subscription.topic]);
+                let mut stream = consumer_clone.stream();
+
+                {
+                    let mut consumers = cloned_self.consumers.write();
+                    let hash = Self::create_hash(
+                        &client_identifier,
+                        &subscription.topic,
+                        &subscription.group,
+                    );
+                    _ = consumers.insert(hash, consumer_holder);
+                }
 
                 while let Some(message) = tokio::select! {
                     stream_result = stream.next() => {
@@ -177,13 +228,14 @@ impl KafkaService {
                         continue;
                     }
 
+                    let message_id = uuid::Uuid::new_v4().to_string();
+                    let message_id_cloned = message_id.clone();
                     {
                         let message_data = message_data_raw.unwrap();
                         let clients = cloned_self.clients.read();
                         let found_client = clients.get(&client_identifier);
 
                         if let Some(client) = found_client {
-                            let message_id = uuid::Uuid::new_v4().to_string();
                             let data_pipe_message = Arc::new(DataPipeMessage::new(
                                 client_identifier.to_owned(),
                                 message_id,
@@ -191,6 +243,7 @@ impl KafkaService {
                                 Bytes::copy_from_slice(message_data),
                                 Some(message.topic().to_owned()),
                                 vec![],
+                                Some(subscription.group.to_owned()),
                             ));
                             let send_result = client.sender.send(data_pipe_message);
                             if send_result.is_err() {
@@ -201,11 +254,30 @@ impl KafkaService {
                         }
                     }
 
-                    let commit_message_result =
-                        consumer.commit_message(&message, CommitMode::Async);
+                    if !cloned_self.configuration.ack_mode {
+                        let commit_message_result =
+                            consumer_clone.commit_message(&message, CommitMode::Async);
 
-                    if commit_message_result.is_err() {
-                        warn!("Kafka consumer commit error: {:?}", commit_message_result);
+                        if commit_message_result.is_err() {
+                            warn!("Kafka consumer commit error: {:?}", commit_message_result);
+                        }
+                    } else {
+                        let mut clients = cloned_self.clients.write();
+                        let result = clients.add_in_flight_offset(
+                            &client_identifier,
+                            &subscription.topic.to_owned(),
+                            &subscription.group.to_owned(),
+                            message.offset(),
+                            &message_id_cloned,
+                            message.partition() as u16,
+                        );
+
+                        if result.is_err() {
+                            warn!(
+                                "Kafka consumer error, cannot add inflight message: {:?}",
+                                result
+                            );
+                        }
                     }
                 }
 
@@ -213,7 +285,17 @@ impl KafkaService {
                     "Kafka consumer closed, unsubscribing of client {0} and topic {1}, group {2}",
                     client_identifier, subscription.topic, subscription.group
                 );
-                consumer.unsubscribe();
+                consumer_clone.unsubscribe();
+                {
+                    let mut consumers = cloned_self.consumers.write();
+                    let hash = Self::create_hash(
+                        &client_identifier,
+                        &subscription.topic,
+                        &subscription.group,
+                    );
+
+                    _ = consumers.remove(&hash);
+                }
                 warn!(
                     "Kafka consumer closed, unsubscribed of client {0} and topic {1}, group {2}",
                     client_identifier, subscription.topic, subscription.group
@@ -308,5 +390,14 @@ impl KafkaService {
         } else {
             panic!("Cancellation token not exist")
         }
+    }
+
+    fn create_hash(client_identifier: &str, topic: &str, group: &str) -> i32 {
+        let mut hasher = xxh32::Xxh32::new(0);
+        hasher.update(client_identifier.as_bytes());
+        hasher.update(topic.as_bytes());
+        hasher.update(group.as_bytes());
+
+        hasher.digest() as i32
     }
 }

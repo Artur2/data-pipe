@@ -44,5 +44,6 @@ pub fn create_random_message(client_identifier: String) -> DataPipeMessage {
         bytes,
         None,
         vec![],
+        None
     )
 }
