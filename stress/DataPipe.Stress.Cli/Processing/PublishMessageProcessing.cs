@@ -7,6 +7,7 @@ using DataPipe.Stress.Cli.Messaging;
 
 namespace DataPipe.Stress.Cli.Processing;
 
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
 public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory, JsonSerializerOptions options)
     : IMessageProcessing
 {
@@ -50,6 +51,7 @@ public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory,
                     var message =
                         JsonSerializer.Deserialize<DataPipeMessage>(ackMessageBuffer.AsSpan(0, readingResult.Count),
                             options);
+
                     Console.WriteLine($"Message received: {message.MessageIdentifier}, type: {message.MessageType}");
 
                     await Task.Delay(sleep, cancellationTokenSource.Token);
@@ -75,3 +77,5 @@ public class PublishMessageProcessing(RandomMessageFactory randomMessageFactory,
         }
     }
 }
+
+#pragma warning restore CS8602 // Dereference of a possibly null reference.

@@ -13,6 +13,7 @@ pub struct EchoService {
     clients: Arc<RwLock<ClientsManager>>,
 }
 
+#[allow(dead_code)]
 impl EchoService {
     pub fn new(clients: Arc<RwLock<ClientsManager>>) -> Arc<EchoService> {
         Arc::new(EchoService { clients })

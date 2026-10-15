@@ -9,7 +9,7 @@ use crate::metrics::statistics::Statistics;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{info, warn};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rdkafka::consumer::{CommitMode, Consumer};
 use rdkafka::message::{Header, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
@@ -25,7 +25,7 @@ pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
     configuration: Arc<DataPipeConfiguration>,
     statistics: Arc<Statistics>,
-    consumers: RwLock<HashMap<i32, Arc<DefaultConsumer>>>,
+    consumers: Mutex<HashMap<i32, Arc<DefaultConsumer>>>,
 }
 
 type ProducerResult = Result<FutureProducer, DataPipeError>;
@@ -36,7 +36,7 @@ impl KafkaService {
         configuration: Arc<DataPipeConfiguration>,
         statistics: Arc<Statistics>,
     ) -> Arc<KafkaService> {
-        let consumers = RwLock::new(HashMap::new());
+        let consumers = Mutex::new(HashMap::new());
         Arc::new(KafkaService {
             clients,
             configuration,
@@ -172,7 +172,7 @@ impl KafkaService {
                 let mut stream = consumer_clone.stream();
 
                 {
-                    let mut consumers = cloned_self.consumers.write();
+                    let mut consumers = cloned_self.consumers.lock();
                     let hash = Self::create_hash(
                         &client_identifier,
                         &subscription.topic,
@@ -255,7 +255,7 @@ impl KafkaService {
                 );
                 consumer_clone.unsubscribe();
                 {
-                    let mut consumers = cloned_self.consumers.write();
+                    let mut consumers = cloned_self.consumers.lock();
                     let hash = Self::create_hash(
                         &client_identifier,
                         &subscription.topic,
@@ -391,7 +391,7 @@ impl KafkaService {
             let (offset, partition) = compute_result.unwrap();
             let hash = Self::create_hash(&message.client_identifier, &topic, &group);
 
-            let consumers = self.consumers.write();
+            let consumers = self.consumers.lock();
             let consumer = consumers.get(&hash);
             if let Some(consumer) = consumer {
                 let mut tpl = TopicPartitionList::new();
