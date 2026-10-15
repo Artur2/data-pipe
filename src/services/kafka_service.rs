@@ -121,39 +121,7 @@ impl KafkaService {
                         warn!("Management process error: {:?}", result);
                     }
                 } else if message.is_ack() {
-                    let mut clients = cloned_self.clients.write();
-
-                    if message.topic.is_none() || message.group.is_none() {
-                        warn!("Kafka message received an empty topic or group");
-                        continue;
-                    }
-
-                    let topic = message.topic.as_ref().unwrap();
-                    let group = message.group.as_ref().unwrap();
-
-                    let compute_result = clients.compute_offset_to_commit(
-                        &message.client_identifier,
-                        &topic,
-                        &group,
-                        &message.message_identifier,
-                    );
-
-                    if compute_result.is_ok() {
-                        let (offset, partition) = compute_result.unwrap();
-                        let hash = Self::create_hash(&message.client_identifier, &topic, &group);
-
-                        let consumers = cloned_self.consumers.read();
-                        let consumer = consumers.get(&hash);
-                        if let Some(consumer) = consumer {
-                            let mut tpl = TopicPartitionList::new();
-                            _ = tpl.add_partition_offset(
-                                &topic,
-                                partition as i32,
-                                Offset::Offset(offset),
-                            );
-                            consumer.commit(&tpl, CommitMode::Async).unwrap();
-                        }
-                    }
+                    cloned_self.process_ack_message(message);
                 }
             }
 
@@ -399,5 +367,37 @@ impl KafkaService {
         hasher.update(group.as_bytes());
 
         hasher.digest() as i32
+    }
+
+    fn process_ack_message(&self, message: Arc<DataPipeMessage>) {
+        let mut clients = self.clients.write();
+
+        if message.topic.is_none() || message.group.is_none() {
+            warn!("Kafka message received an empty topic or group");
+            return;
+        }
+
+        let topic = message.topic.as_ref().unwrap();
+        let group = message.group.as_ref().unwrap();
+
+        let compute_result = clients.compute_offset_to_commit(
+            &message.client_identifier,
+            &topic,
+            &group,
+            &message.message_identifier,
+        );
+
+        if compute_result.is_ok() {
+            let (offset, partition) = compute_result.unwrap();
+            let hash = Self::create_hash(&message.client_identifier, &topic, &group);
+
+            let consumers = self.consumers.read();
+            let consumer = consumers.get(&hash);
+            if let Some(consumer) = consumer {
+                let mut tpl = TopicPartitionList::new();
+                _ = tpl.add_partition_offset(&topic, partition as i32, Offset::Offset(offset));
+                consumer.commit(&tpl, CommitMode::Async).unwrap();
+            }
+        }
     }
 }
