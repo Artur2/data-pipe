@@ -7,9 +7,9 @@ Stress testing implemented using **C#** and plain **System.Net.WebSockets**
 ### TODOS ###
 
  - [ ] Telemetry
- - [ ] Statistics
+ - [x] Statistics
  - [x] Throttling
- - [ ] Think about transactional processing(in-flight commiting using low watermark)
+ - [x] Ack (on in-flight low watermark processing)
  - [x] Configuration
 
 ### License ###
