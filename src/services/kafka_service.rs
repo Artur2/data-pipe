@@ -391,7 +391,7 @@ impl KafkaService {
             let (offset, partition) = compute_result.unwrap();
             let hash = Self::create_hash(&message.client_identifier, &topic, &group);
 
-            let consumers = self.consumers.read();
+            let consumers = self.consumers.write();
             let consumer = consumers.get(&hash);
             if let Some(consumer) = consumer {
                 let mut tpl = TopicPartitionList::new();
