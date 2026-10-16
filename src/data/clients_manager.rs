@@ -1,3 +1,4 @@
+use crate::common::utils::create_hash;
 use crate::data::client::Client;
 use crate::data::client_cancellation_holder::ClientCancellationHolder;
 use crate::data::client_tracking_info::{ClientTrackingData, ClientTrackingInfo};
@@ -10,7 +11,7 @@ use xxhash_rust::xxh32;
 pub struct ClientsManager {
     clients: HashMap<String, Client>,
     /// Key is hash of topic, group. Value is client cancellation holder
-    lookup: HashMap<u32, ClientCancellationHolder>,
+    lookup: HashMap<i32, ClientCancellationHolder>,
 }
 
 #[allow(dead_code)]
@@ -36,7 +37,7 @@ impl ClientsManager {
         identifier: &str,
         client_subscription: ClientSubscriptionInfo,
     ) -> DataPipeResult<()> {
-        let key = self.compute_hash(&client_subscription.topic, &client_subscription.group);
+        let key = create_hash(&[&client_subscription.topic, &client_subscription.group]);
         if self.lookup.contains_key(&key) {
             return Err(DataPipeError::SubscriptionAlreadyExist(
                 client_subscription.topic,
@@ -63,7 +64,7 @@ impl ClientsManager {
         topic: &str,
         group: &str,
     ) -> DataPipeResult<()> {
-        let key = self.compute_hash(topic, group);
+        let key = create_hash(&[topic, group]);
         if !self.lookup.contains_key(&key) {
             return Ok(());
         }
@@ -78,8 +79,8 @@ impl ClientsManager {
     }
 
     pub fn contains_tracking_info(&self, topic: &str, group: &str) -> bool {
-        let key = self.compute_hash(topic, group);
-        self.lookup.contains_key(&key)
+        let hash = create_hash(&[topic, group]);
+        self.lookup.contains_key(&hash)
     }
 
     pub fn get_client_cancellation_holder(
@@ -87,8 +88,8 @@ impl ClientsManager {
         topic: &str,
         group: &str,
     ) -> Option<&ClientCancellationHolder> {
-        let key = self.compute_hash(topic, group);
-        self.lookup.get(&key)
+        let hash = create_hash(&[topic, group]);
+        self.lookup.get(&hash)
     }
 
     pub fn contains(&self, identifier: &str) -> bool {
@@ -191,14 +192,6 @@ impl ClientsManager {
         } else {
             Err(DataPipeError::OffsetNotFound)
         }
-    }
-
-    fn compute_hash(&self, topic: &str, group: &str) -> u32 {
-        let mut hasher = xxh32::Xxh32::new(0);
-        hasher.update(topic.as_bytes());
-        hasher.update(group.as_bytes());
-
-        hasher.digest()
     }
 }
 
