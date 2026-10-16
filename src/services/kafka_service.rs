@@ -65,36 +65,31 @@ impl KafkaService {
 
             if producer_result.is_err() {
                 warn!(
-                    "Kafka producer creation error: {:?}",
+                    "Producer creation error: {:?}",
                     producer_result.err().unwrap()
-                );
-                return;
-            }
+                )
+            } else {
+                let producer = producer_result.unwrap();
 
-            let producer = producer_result.unwrap();
-            
-            while let Ok(message) = receiver.recv().await {
-                let cloned_self = self.clone();
-                if !message.is_management() && !message.is_ack() {
-                    let processing_result = cloned_self.process_default_message(message, producer.clone());
-                    if processing_result.is_err() {
-                        warn!(
-                            "Processing message error: {:?}",
-                            processing_result.err().unwrap()
-                        );
-                    }
-                } else if message.is_management() {
+                while let Ok(message) = receiver.recv().await {
                     let cloned_self = self.clone();
-                    let result = cloned_self.manage_subscription(message);
-                    if result.is_err() {
-                        warn!("Management process error: {:?}", result);
-                    }
-                } else if message.is_ack() {
-                    cloned_self.process_ack_message(message);
-                }
-            }
+                    let mut processing_result: DataPipeResult<()> = DataPipeResult::Ok(());
 
-            warn!("Message producing stopped");
+                    if !message.is_management() && !message.is_ack() {
+                        processing_result = cloned_self.process_default_message(message, &producer);
+                    } else if message.is_management() {
+                        processing_result = cloned_self.manage_subscription(message);
+                    } else if message.is_ack() {
+                        processing_result = cloned_self.process_ack_message(message);
+                    }
+
+                    if processing_result.is_err() {
+                        warn!("Processing message error: {:?}", processing_result.unwrap())
+                    }
+                }
+
+                warn!("Message producing stopped");
+            }
         });
 
         Ok(())
@@ -113,7 +108,7 @@ impl KafkaService {
     fn process_default_message(
         self: Arc<Self>,
         message: Arc<DataPipeMessage>,
-        producer: FutureProducer,
+        producer: &FutureProducer
     ) -> DataPipeResult<()> {
         let cloned_stats = self.statistics.clone();
         if self.configuration.harvest_statistics {
@@ -123,15 +118,14 @@ impl KafkaService {
 
         let headers = Self::create_headers(&message);
         if let Err(_) = &headers {
-            warn!("Kafka message received a message with no headers");
             return Err(DataPipeError::SendMessageFailed);
         }
 
         let message_reference = message.clone();
         let topic = message_reference.topic.clone().unwrap();
-        let cloned_producer = producer.clone();
+        let producer_ref = producer.clone();
         tokio::spawn(async move {
-            let result = cloned_producer
+            let result = producer_ref
                 .send(
                     FutureRecord::to(&topic)
                         .payload(message.data.as_ref())
@@ -186,7 +180,7 @@ impl KafkaService {
 
                 let consumer_holder_ref = consumer_ref.clone();
                 let consumer_for_end_subscription_ref = consumer_ref.clone();
-                
+
                 let mut stream = consumer_ref.stream();
 
                 {
@@ -384,12 +378,11 @@ impl KafkaService {
         hasher.digest() as i32
     }
 
-    fn process_ack_message(&self, message: Arc<DataPipeMessage>) {
+    fn process_ack_message(&self, message: Arc<DataPipeMessage>) -> DataPipeResult<()> {
         let mut clients = self.clients.write();
 
         if message.topic.is_none() || message.group.is_none() {
-            warn!("Kafka message received an empty topic or group");
-            return;
+            return Err(DataPipeError::SendMessageFailed);
         }
 
         let topic = message.topic.as_ref().unwrap();
@@ -414,16 +407,18 @@ impl KafkaService {
                 consumer.commit(&tpl, CommitMode::Async).unwrap();
             }
         }
+
+        Ok(())
     }
 
     fn end_consuming(
         &self,
-        consumer_clone: Arc<StreamConsumer<DefaultContext>>,
+        consumer_ref: Arc<StreamConsumer<DefaultContext>>,
         client_identifier: &str,
         topic: &str,
         group: &str,
     ) -> DataPipeResult<()> {
-        consumer_clone.unsubscribe();
+        consumer_ref.unsubscribe();
         {
             let mut consumers = self.consumers.lock();
             let hash = Self::create_hash(client_identifier, &topic, &group);
