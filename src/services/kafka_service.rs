@@ -1,3 +1,4 @@
+use crate::common::utils::create_hash;
 use crate::configuration::configuration::DataPipeConfiguration;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
@@ -49,8 +50,7 @@ impl KafkaService {
         self: Arc<Self>,
         receiver: Receiver<Arc<DataPipeMessage>>,
     ) -> DataPipeResult<()> {
-        _ = self.init_message_processing(receiver);
-        Ok(())
+        self.init_message_processing(receiver)
     }
 
     fn init_message_processing(
@@ -108,7 +108,7 @@ impl KafkaService {
     fn process_default_message(
         self: Arc<Self>,
         message: Arc<DataPipeMessage>,
-        producer: &FutureProducer
+        producer: &FutureProducer,
     ) -> DataPipeResult<()> {
         let cloned_stats = self.statistics.clone();
         if self.configuration.harvest_statistics {
@@ -185,11 +185,10 @@ impl KafkaService {
 
                 {
                     let mut consumers = cloned_self.consumers.lock();
-                    let hash = Self::create_hash(
-                        &client_identifier,
+                    let hash = create_hash(&[&client_identifier,
                         &subscription.topic,
-                        &subscription.group,
-                    );
+                        &subscription.group]);
+
                     _ = consumers.insert(hash, consumer_holder_ref);
                 }
 
@@ -369,15 +368,6 @@ impl KafkaService {
         }
     }
 
-    fn create_hash(client_identifier: &str, topic: &str, group: &str) -> i32 {
-        let mut hasher = xxh32::Xxh32::new(0);
-        hasher.update(client_identifier.as_bytes());
-        hasher.update(topic.as_bytes());
-        hasher.update(group.as_bytes());
-
-        hasher.digest() as i32
-    }
-
     fn process_ack_message(&self, message: Arc<DataPipeMessage>) -> DataPipeResult<()> {
         let mut clients = self.clients.write();
 
@@ -397,7 +387,7 @@ impl KafkaService {
 
         if compute_result.is_ok() {
             let (offset, partition) = compute_result.unwrap();
-            let hash = Self::create_hash(&message.client_identifier, &topic, &group);
+            let hash = create_hash(&[&message.client_identifier, &topic, &group]);
 
             let consumers = self.consumers.lock();
             let consumer = consumers.get(&hash);
@@ -421,7 +411,7 @@ impl KafkaService {
         consumer_ref.unsubscribe();
         {
             let mut consumers = self.consumers.lock();
-            let hash = Self::create_hash(client_identifier, &topic, &group);
+            let hash = create_hash(&[client_identifier, &topic, &group]);
 
             _ = consumers.remove(&hash);
         }

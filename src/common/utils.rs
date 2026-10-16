@@ -3,6 +3,7 @@ use crate::data::error::DataPipeResult;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
 use regex::Regex;
+use xxhash_rust::xxh32;
 use std::sync::LazyLock;
 use bytes::Bytes;
 
@@ -46,4 +47,13 @@ pub fn create_random_message(client_identifier: String) -> DataPipeMessage {
         vec![],
         None
     )
+}
+
+pub fn create_hash(items: &[&str]) -> i32 {
+    let mut hasher = xxh32::Xxh32::new(0);
+    for item in items {
+        hasher.update(item.as_bytes());
+    }
+
+    hasher.digest() as i32
 }
