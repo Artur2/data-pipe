@@ -181,11 +181,13 @@ impl KafkaService {
                 }
 
                 let consumer: DefaultConsumer = consumer_result.unwrap();
-                let consumer_clone = Arc::new(consumer);
-                let consumer_holder = consumer_clone.clone();
-                let consumer_end_subscription = consumer_clone.clone();
-                _ = consumer_clone.subscribe(&[&subscription.topic]);
-                let mut stream = consumer_clone.stream();
+                let consumer_ref = Arc::new(consumer);
+                _ = consumer_ref.subscribe(&[&subscription.topic]);
+
+                let consumer_holder_ref = consumer_ref.clone();
+                let consumer_for_end_subscription_ref = consumer_ref.clone();
+                
+                let mut stream = consumer_ref.stream();
 
                 {
                     let mut consumers = cloned_self.consumers.lock();
@@ -194,7 +196,7 @@ impl KafkaService {
                         &subscription.topic,
                         &subscription.group,
                     );
-                    _ = consumers.insert(hash, consumer_holder);
+                    _ = consumers.insert(hash, consumer_holder_ref);
                 }
 
                 while let Some(message) = tokio::select! {
@@ -240,7 +242,7 @@ impl KafkaService {
 
                     if !cloned_self.configuration.ack_mode {
                         let commit_message_result =
-                            consumer_clone.commit_message(&message, CommitMode::Async);
+                            consumer_ref.commit_message(&message, CommitMode::Async);
 
                         if commit_message_result.is_err() {
                             warn!("Kafka consumer commit error: {:?}", commit_message_result);
@@ -271,7 +273,7 @@ impl KafkaService {
                 );
 
                 _ = cloned_self.end_consuming(
-                    consumer_end_subscription,
+                    consumer_for_end_subscription_ref,
                     &client_identifier,
                     &subscription.topic,
                     &subscription.group,
