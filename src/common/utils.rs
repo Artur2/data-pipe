@@ -2,10 +2,10 @@ use crate::data::error::DataPipeError::ClientIdentificationError;
 use crate::data::error::DataPipeResult;
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
 use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
-use regex::Regex;
-use xxhash_rust::xxh32;
-use std::sync::LazyLock;
 use bytes::Bytes;
+use regex::Regex;
+use std::sync::LazyLock;
+use xxhash_rust::xxh32;
 
 pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPipeResult<String> {
     static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[?&]([^=#]+)=([^&#]*)").unwrap());
@@ -16,7 +16,7 @@ pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPip
                 if let Some(id) = caps.get(2) {
                     if id.is_empty() {
                         return Err(ClientIdentificationError(
-                            "Parameter client id is empty".to_string(),
+                            format!("Parameter {0} id is empty", name_of_parameter).to_string(),
                         ));
                     }
 
@@ -45,7 +45,7 @@ pub fn create_random_message(client_identifier: String) -> DataPipeMessage {
         bytes,
         None,
         vec![],
-        None
+        None,
     )
 }
 

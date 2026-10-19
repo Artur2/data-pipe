@@ -9,7 +9,7 @@ use crate::data::messaging::data_pipe_message_type::DataPipeMessageType;
 use crate::metrics::statistics::Statistics;
 use bytes::Bytes;
 use futures_util::StreamExt;
-use log::{info, warn};
+use log::{error, info, warn};
 use parking_lot::{Mutex, RwLock};
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::{Header, OwnedHeaders};
@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
-use xxhash_rust::xxh32;
 
 pub struct KafkaService {
     clients: Arc<RwLock<ClientsManager>>,
@@ -63,19 +62,14 @@ impl KafkaService {
                 &self.configuration.kafka_message_send_timeout,
             );
 
-            if producer_result.is_err() {
-                warn!(
-                    "Producer creation error: {:?}",
-                    producer_result.err().unwrap()
-                )
-            } else {
+            if producer_result.is_ok() {
                 let producer = producer_result.unwrap();
 
                 while let Ok(message) = receiver.recv().await {
                     let cloned_self = self.clone();
-                    let mut processing_result: DataPipeResult<()> = DataPipeResult::Ok(());
+                    let mut processing_result: DataPipeResult<()> = Ok(());
 
-                    if !message.is_management() && !message.is_ack() {
+                    if message.is_default() {
                         processing_result = cloned_self.process_default_message(message, &producer);
                     } else if message.is_management() {
                         processing_result = cloned_self.manage_subscription(message);
@@ -87,8 +81,8 @@ impl KafkaService {
                         warn!("Processing message error: {:?}", processing_result.unwrap())
                     }
                 }
-
-                warn!("Message producing stopped");
+            } else {
+                error!("Message producing stopped");
             }
         });
 
@@ -122,7 +116,7 @@ impl KafkaService {
         }
 
         let message_reference = message.clone();
-        let topic = message_reference.topic.clone().unwrap();
+        let topic = message_reference.topic.to_owned().unwrap();
         let producer_ref = producer.clone();
         tokio::spawn(async move {
             let result = producer_ref
@@ -185,9 +179,11 @@ impl KafkaService {
 
                 {
                     let mut consumers = cloned_self.consumers.lock();
-                    let hash = create_hash(&[&client_identifier,
+                    let hash = create_hash(&[
+                        &client_identifier,
                         &subscription.topic,
-                        &subscription.group]);
+                        &subscription.group,
+                    ]);
 
                     _ = consumers.insert(hash, consumer_holder_ref);
                 }
@@ -386,7 +382,7 @@ impl KafkaService {
         );
 
         if compute_result.is_ok() {
-            let (offset, partition) = compute_result.unwrap();
+            let (offset, partition) = compute_result?;
             let hash = create_hash(&[&message.client_identifier, &topic, &group]);
 
             let consumers = self.consumers.lock();

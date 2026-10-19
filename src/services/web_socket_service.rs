@@ -9,7 +9,7 @@ use bytes::Bytes;
 use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
-use log::{info, warn};
+use log::{error, info, warn};
 use parking_lot::RwLock;
 use sockudo_ws::error::CloseReason;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
@@ -99,10 +99,10 @@ impl WebSocketService {
         mut reader: SplitReader<Stream<Http1>>,
         cancellation_token: CancellationToken,
     ) -> DataPipeResult<()> {
-        while let Some(Ok(msg)) = reader.next().await {
+        while let Some(Ok(message)) = reader.next().await {
             let cloned_self = self.clone();
             let cloned_rate_limiter = self.rate_limiter.clone();
-            match msg {
+            match message {
                 Message::Text(text) => {
                     cloned_self.write_per_message_statistics();
                     cloned_rate_limiter.until_ready().await;
@@ -130,15 +130,13 @@ impl WebSocketService {
         mut ws_writer: SplitWriter<Stream<Http1>>,
         cancellation_token: CancellationToken,
     ) -> DataPipeResult<SplitWriter<Stream<Http1>>> {
-        // receive message from outside and write it to ws
-
         loop {
             let message = tokio::select! {
             message = rx.recv() => { message }
             _ = cancellation_token.cancelled() => break };
 
-            if let Ok(msg) = message {
-                let message = serde_json::to_string(&msg.deref()).unwrap();
+            if let Ok(message) = message {
+                let message = serde_json::to_string(message.deref()).unwrap();
 
                 ws_writer
                     .send(Message::from(message))
@@ -201,7 +199,7 @@ impl WebSocketService {
         let server = WebSocketServer::<Http1>::new(Config::default());
         server
             .serve(listener, move |ws, req| {
-                let this = Arc::clone(&self);
+                let self_reference = Arc::clone(&self);
 
                 async move {
                     let client_id_result = utils::get_parameter_from_query(&req.path, "clientId");
@@ -215,30 +213,31 @@ impl WebSocketService {
 
                     info!("Connecting client with id {}", client_id);
 
-                    let receiver_self = Arc::clone(&this);
-                    let writer_self = Arc::clone(&this);
-                    let client_registration_self = Arc::clone(&this);
+                    let receiver_self = Arc::clone(&self_reference);
+                    let writer_self = Arc::clone(&self_reference);
+                    let client_registration_self = Arc::clone(&self_reference);
                     let cancellation_token = CancellationToken::new();
                     let reader_cancellation_token = cancellation_token.clone();
                     let writer_cancellation_token = cancellation_token.clone();
+                    let (reader, writer) = ws.split();
 
-                    let result = client_registration_self.register_client(&client_id);
-                    if result.is_err() {
-                        warn!(
-                            "Can't register client with id {}, error: {}",
-                            client_id,
-                            result.err().unwrap()
-                        );
+                    let registration_result = client_registration_self.register_client(&client_id);
+
+                    if matches!(registration_result, Err(DataPipeError::ClientAlreadyExist)) {
+                        self_reference.deny_duplicate_client_connection(writer, &client_id)
+                            .await;
+                        return;
+                    } else if registration_result.is_err() {
+                        self_reference.close_with_internal_error(writer).await;
                         return;
                     }
 
-                    let client_id_writer = client_id.clone();
+                    let client_id_for_writer = client_id.clone();
 
-                    let (reader, writer) = ws.split();
-                    let writer_result = tokio::task::spawn(async move {
+                    let writer_result = tokio::spawn(async move {
                         let self_reference = writer_self.clone();
                         let client_receiver =
-                            self_reference.get_receiver_by_client_identifier(&client_id_writer);
+                            self_reference.get_receiver_by_client_identifier(&client_id_for_writer);
 
                         if client_receiver.is_err() {
                             warn!("Client is not registered");
@@ -254,7 +253,7 @@ impl WebSocketService {
                             .await
                     });
 
-                    tokio::task::spawn(async move {
+                    tokio::spawn(async move {
                         let sender = receiver_self.sender_out.clone();
                         _ = receiver_self
                             .web_socket_reader(sender, reader, reader_cancellation_token)
@@ -265,7 +264,7 @@ impl WebSocketService {
 
                     let writer_task_result = writer_result.await.unwrap();
                     if let Ok(writer) = writer_task_result {
-                        this.close_connection_gracefully(writer, &client_id).await;
+                        self_reference.close_connection_gracefully(writer, &client_id).await;
                     }
                 }
             })
@@ -329,5 +328,27 @@ impl WebSocketService {
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
         self.remove_client(client_id);
+    }
+
+    async fn deny_duplicate_client_connection(
+        self: Arc<Self>,
+        mut writer: SplitWriter<Stream<Http1>>,
+        client_id: &str,
+    ) {
+        let close_reason = CloseReason::new(
+            CloseReason::POLICY,
+            format!("Client with id {} already connected", client_id),
+        );
+        let _ = writer.send(Message::Close(Some(close_reason))).await;
+        let _ = writer.flush().await;
+    }
+
+    async fn close_with_internal_error(self: Arc<Self>, mut writer: SplitWriter<Stream<Http1>>) {
+        let close_reason = CloseReason::new(
+            CloseReason::INTERNAL,
+            "Client registration returned error".to_string(),
+        );
+        let _ = writer.send(Message::Close(Some(close_reason))).await;
+        let _ = writer.flush().await;
     }
 }

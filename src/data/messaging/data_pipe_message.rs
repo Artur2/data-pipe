@@ -52,6 +52,10 @@ impl DataPipeMessage {
         self.message_type == DataPipeMessageType::Ack
     }
 
+    pub fn is_default(&self) -> bool {
+        self.message_type == DataPipeMessageType::Default
+    }
+
     pub fn with_subscription(
         client_identifier: String,
         message_identifier: String,

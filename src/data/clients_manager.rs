@@ -6,7 +6,6 @@ use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::client_subscription_info::ClientSubscriptionInfo;
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
-use xxhash_rust::xxh32;
 
 pub struct ClientsManager {
     clients: HashMap<String, Client>,
