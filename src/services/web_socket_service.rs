@@ -9,7 +9,7 @@ use bytes::Bytes;
 use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
-use log::{error, info, warn};
+use log::{info, warn};
 use parking_lot::RwLock;
 use sockudo_ws::error::CloseReason;
 use sockudo_ws::{Config, Http1, Message, SplitReader, SplitWriter, Stream, WebSocketServer};
@@ -346,7 +346,7 @@ impl WebSocketService {
     async fn close_with_internal_error(self: Arc<Self>, mut writer: SplitWriter<Stream<Http1>>) {
         let close_reason = CloseReason::new(
             CloseReason::INTERNAL,
-            "Client registration returned error".to_string(),
+            "Unknown error occurred".to_string(),
         );
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
