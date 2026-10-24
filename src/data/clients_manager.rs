@@ -72,7 +72,7 @@ impl ClientsManager {
         let client = self.clients.get_mut(identifier).unwrap();
         client
             .tracking_infos
-            .retain(|sub| &sub.topic != topic && &sub.group != group);
+            .retain(|sub| sub.topic != topic && sub.group != group);
 
         Ok(())
     }
@@ -134,7 +134,7 @@ impl ClientsManager {
             .tracking_infos
             .iter_mut()
             .find(|x| x.topic == topic && x.group == group);
-        if let None = tracking_info_raw {
+        if tracking_info_raw.is_none() {
             return Err(DataPipeError::ClientNotFound);
         }
 
@@ -161,7 +161,7 @@ impl ClientsManager {
             .tracking_infos
             .iter_mut()
             .find(|x| x.topic == topic && x.group == group);
-        if let None = tracking_info_raw {
+        if tracking_info_raw.is_none() {
             return Err(DataPipeError::ClientNotFound);
         }
 

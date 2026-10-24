@@ -62,9 +62,7 @@ impl KafkaService {
                 &self.configuration.kafka_message_send_timeout,
             );
 
-            if producer_result.is_ok() {
-                let producer = producer_result.unwrap();
-
+            if let Ok(producer) = producer_result {
                 while let Ok(message) = receiver.recv().await {
                     let cloned_self = self.clone();
                     let mut processing_result: DataPipeResult<()> = Ok(());
@@ -78,7 +76,10 @@ impl KafkaService {
                     }
 
                     if processing_result.is_err() {
-                        warn!("Processing message error: {:?}", processing_result.unwrap())
+                        warn!(
+                            "Processing message error: {:?}",
+                            processing_result.err().unwrap()
+                        )
                     }
                 }
             } else {
@@ -111,7 +112,7 @@ impl KafkaService {
         }
 
         let headers = Self::create_headers(&message);
-        if let Err(_) = &headers {
+        if headers.is_err() {
             return Err(DataPipeError::SendMessageFailed);
         }
 
@@ -286,8 +287,8 @@ impl KafkaService {
                 let clients = self.clients.read();
                 let cancellation_holder = clients
                     .get_client_cancellation_holder(&subscription.topic, &subscription.group);
-                if cancellation_holder.is_some() {
-                    let token = cancellation_holder.unwrap().token.clone();
+                if let Some(cancellation_holder) = cancellation_holder {
+                    let token = cancellation_holder.token.clone();
                     token.cancel();
                 }
             }
@@ -376,20 +377,20 @@ impl KafkaService {
 
         let compute_result = clients.compute_offset_to_commit(
             &message.client_identifier,
-            &topic,
-            &group,
+            topic,
+            group,
             &message.message_identifier,
         );
 
         if compute_result.is_ok() {
             let (offset, partition) = compute_result?;
-            let hash = create_hash(&[&message.client_identifier, &topic, &group]);
+            let hash = create_hash(&[&message.client_identifier, topic, group]);
 
             let consumers = self.consumers.lock();
             let consumer = consumers.get(&hash);
             if let Some(consumer) = consumer {
                 let mut tpl = TopicPartitionList::new();
-                _ = tpl.add_partition_offset(&topic, partition as i32, Offset::Offset(offset));
+                _ = tpl.add_partition_offset(topic, partition as i32, Offset::Offset(offset));
                 consumer.commit(&tpl, CommitMode::Async).unwrap();
             }
         }
@@ -407,7 +408,7 @@ impl KafkaService {
         consumer_ref.unsubscribe();
         {
             let mut consumers = self.consumers.lock();
-            let hash = create_hash(&[client_identifier, &topic, &group]);
+            let hash = create_hash(&[client_identifier, topic, group]);
 
             _ = consumers.remove(&hash);
         }

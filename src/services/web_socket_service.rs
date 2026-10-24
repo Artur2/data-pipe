@@ -71,7 +71,7 @@ impl WebSocketService {
 
     fn get_receiver_by_client_identifier(
         self: Arc<Self>,
-        identifier: &String,
+        identifier: &str,
     ) -> DataPipeResult<Receiver<Arc<DataPipeMessage>>> {
         let clients = self.clients.read();
         if !clients.contains(identifier) {
@@ -107,12 +107,9 @@ impl WebSocketService {
                     cloned_self.write_per_message_statistics();
                     cloned_rate_limiter.until_ready().await;
 
-                    match self.clone().try_receive_message(sender.clone(), text).await {
-                        Err(e) => {
-                            warn!("Can't receive message, reason {}", e);
-                            continue;
-                        }
-                        _ => {}
+                    if let Err(e) = self.clone().try_receive_message(sender.clone(), text).await {
+                        warn!("Can't receive message, reason {}", e);
+                        continue;
                     }
                 }
                 Message::Close(_) => cancellation_token.cancel(),
@@ -224,7 +221,8 @@ impl WebSocketService {
                     let registration_result = client_registration_self.register_client(&client_id);
 
                     if matches!(registration_result, Err(DataPipeError::ClientAlreadyExist)) {
-                        self_reference.deny_duplicate_client_connection(writer, &client_id)
+                        self_reference
+                            .deny_duplicate_client_connection(writer, &client_id)
                             .await;
                         return;
                     } else if registration_result.is_err() {
@@ -264,7 +262,9 @@ impl WebSocketService {
 
                     let writer_task_result = writer_result.await.unwrap();
                     if let Ok(writer) = writer_task_result {
-                        self_reference.close_connection_gracefully(writer, &client_id).await;
+                        self_reference
+                            .close_connection_gracefully(writer, &client_id)
+                            .await;
                     }
                 }
             })
@@ -344,10 +344,8 @@ impl WebSocketService {
     }
 
     async fn close_with_internal_error(self: Arc<Self>, mut writer: SplitWriter<Stream<Http1>>) {
-        let close_reason = CloseReason::new(
-            CloseReason::INTERNAL,
-            "Unknown error occurred".to_string(),
-        );
+        let close_reason =
+            CloseReason::new(CloseReason::INTERNAL, "Unknown error occurred".to_string());
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
     }

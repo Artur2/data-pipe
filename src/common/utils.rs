@@ -11,18 +11,12 @@ pub fn get_parameter_from_query(query: &str, name_of_parameter: &str) -> DataPip
     static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[?&]([^=#]+)=([^&#]*)").unwrap());
 
     for caps in REGEX.captures_iter(query) {
-        if let Some(cap) = caps.get(1) {
-            if cap.as_str() == name_of_parameter {
-                if let Some(id) = caps.get(2) {
-                    if id.is_empty() {
-                        return Err(ClientIdentificationError(
-                            format!("Parameter {0} id is empty", name_of_parameter).to_string(),
-                        ));
-                    }
-
-                    return Ok(id.as_str().to_owned());
-                }
-            }
+        if let Some(cap) = caps.get(1)
+            && cap.as_str() == name_of_parameter
+            && let Some(id) = caps.get(2)
+            && !id.is_empty()
+        {
+            return Ok(id.as_str().to_owned());
         }
     }
 

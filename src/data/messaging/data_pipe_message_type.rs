@@ -13,16 +13,16 @@ impl std::fmt::Display for DataPipeMessageType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DataPipeMessageType::Default => {
-                write!(f, "{0}", "Default")
+                write!(f, "Default")
             }
             DataPipeMessageType::Subscribe => {
-                write!(f, "{0}", "Subscribe")
+                write!(f, "Subscribe")
             }
             DataPipeMessageType::Unsubscribe => {
-                write!(f, "{0}", "Unsubscribe")
+                write!(f, "Unsubscribe")
             }
             DataPipeMessageType::Ack => {
-                write!(f, "{0}", "Ack")
+                write!(f, "Ack")
             }
         }
     }

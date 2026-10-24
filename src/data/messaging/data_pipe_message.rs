@@ -112,7 +112,7 @@ impl DataPipeMessage {
         }
 
         let result = rmp_serde::from_slice::<Vec<ClientSubscriptionInfo>>(&self.data);
-        Ok(result.map_err(|_| DataPipeError::SerializationError)?)
+        result.map_err(|_| DataPipeError::SerializationError)
     }
 
     /// Message belongs to management process
