@@ -24,7 +24,6 @@ use tokio_util::sync::CancellationToken;
 
 type DataPipeRateLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
-#[allow(dead_code)]
 pub struct WebSocketService {
     configuration: Arc<DataPipeConfiguration>,
     clients: Arc<RwLock<ClientsManager>>,

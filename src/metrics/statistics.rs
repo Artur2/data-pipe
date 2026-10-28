@@ -29,28 +29,28 @@ impl Statistics {
             loop {
                 tick.tick().await;
 
-                let previous_value = self.web_socket_requests.swap(0, Ordering::AcqRel);
+                let previous_value = self.web_socket_requests.swap(0, Ordering::Relaxed);
                 self.web_socket_previous_requests
-                    .swap(previous_value, Ordering::AcqRel);
+                    .swap(previous_value, Ordering::Relaxed);
 
-                let kafka_previous_value = self.kafka_requests.swap(0, Ordering::AcqRel);
+                let kafka_previous_value = self.kafka_requests.swap(0, Ordering::Relaxed);
                 self.kafka_previous_requests
-                    .swap(kafka_previous_value, Ordering::AcqRel);
+                    .swap(kafka_previous_value, Ordering::Relaxed);
             }
         });
     }
 
     pub fn increment_request_per_second_kafka_in(self: Arc<Self>) {
-        self.kafka_requests.fetch_add(1, Ordering::Release);
+        self.kafka_requests.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn increment_requests_per_second_ws_out(self: Arc<Self>) {
-        self.web_socket_requests.fetch_add(1, Ordering::Release);
+        self.web_socket_requests.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn set_out_broadcast_messages_count(self: Arc<Self>, count: u32) {
         self.out_broadcast_messages_count
-            .store(count, Ordering::Release);
+            .store(count, Ordering::Relaxed);
     }
 
     pub fn print_statistics(self: Arc<Self>) {
@@ -59,9 +59,9 @@ impl Statistics {
 Current throughput of outcoming messages to kafka: {} requests/sec
 Current throughput of incoming messages in web_socket_service: {} requests/sec\n\
 Current count of outbound messages: {}\n",
-            self.kafka_previous_requests.load(Ordering::Acquire),
-            self.web_socket_previous_requests.load(Ordering::Acquire),
-            self.out_broadcast_messages_count.load(Ordering::Acquire)
+            self.kafka_previous_requests.load(Ordering::Relaxed),
+            self.web_socket_previous_requests.load(Ordering::Relaxed),
+            self.out_broadcast_messages_count.load(Ordering::Relaxed)
         );
     }
 }
