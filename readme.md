@@ -11,6 +11,7 @@ Stress testing implemented using **C#** and plain **System.Net.WebSockets**
  - [x] Throttling
  - [x] Ack (on in-flight low watermark processing)
  - [x] Configuration
+ - [ ] Close connection on ack timeout
 
 ### License ###
 
