@@ -18,7 +18,6 @@ pub struct DataPipeMessage {
     pub group: Option<String>,
 }
 
-#[allow(dead_code)]
 impl DataPipeMessage {
     pub fn new(
         client_identifier: String,
@@ -56,6 +55,7 @@ impl DataPipeMessage {
         self.message_type == DataPipeMessageType::Default
     }
 
+    #[allow(dead_code)]
     pub fn with_subscription(
         client_identifier: String,
         message_identifier: String,
@@ -80,6 +80,7 @@ impl DataPipeMessage {
         })
     }
 
+    #[allow(dead_code)]
     pub fn with_unsubscribe(
         client_identifier: String,
         message_identifier: String,

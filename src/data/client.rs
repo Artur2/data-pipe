@@ -6,7 +6,6 @@ use tokio::sync::broadcast::Sender;
 
 /// Основная структура, по которой будет роутинг сообщений\
 /// Когда сообщение приходит из Kafka, мы смотрим клиентов и отправляем сообщения по найденому
-#[allow(dead_code)]
 pub struct Client {
     pub identifier: String,
     pub sender: Sender<Arc<DataPipeMessage>>,

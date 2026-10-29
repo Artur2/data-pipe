@@ -13,7 +13,6 @@ pub struct ClientsManager {
     lookup: HashMap<i32, ClientCancellationHolder>,
 }
 
-#[allow(dead_code)]
 impl ClientsManager {
     pub fn new() -> Self {
         ClientsManager {
@@ -75,11 +74,6 @@ impl ClientsManager {
             .retain(|sub| sub.topic != topic && sub.group != group);
 
         Ok(())
-    }
-
-    pub fn contains_tracking_info(&self, topic: &str, group: &str) -> bool {
-        let hash = create_hash(&[topic, group]);
-        self.lookup.contains_key(&hash)
     }
 
     pub fn get_client_cancellation_holder(
