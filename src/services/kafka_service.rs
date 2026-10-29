@@ -366,11 +366,11 @@ impl KafkaService {
     }
 
     fn process_ack_message(&self, message: Arc<DataPipeMessage>) -> DataPipeResult<()> {
-        let mut clients = self.clients.write();
-
         if message.topic.is_none() || message.group.is_none() {
             return Err(DataPipeError::SendMessageFailed);
         }
+
+        let mut clients = self.clients.write();
 
         let topic = message.topic.as_ref().unwrap();
         let group = message.group.as_ref().unwrap();
