@@ -1,6 +1,7 @@
 use crate::common::utils;
 use crate::configuration::configuration::DataPipeConfiguration;
 use crate::data::client::Client;
+use crate::data::client_disconnection_reason::ClientDisconnectionReason;
 use crate::data::clients_manager::ClientsManager;
 use crate::data::error::{DataPipeError, DataPipeResult};
 use crate::data::messaging::data_pipe_message::DataPipeMessage;
@@ -320,32 +321,47 @@ impl WebSocketService {
 
     async fn close_connection_gracefully(
         self: Arc<Self>,
-        mut writer: SplitWriter<Stream<Http1>>,
+        writer: SplitWriter<Stream<Http1>>,
         client_id: &str,
     ) {
-        let close_reason = CloseReason::new(CloseReason::NORMAL, "Connection closed");
-        let _ = writer.send(Message::Close(Some(close_reason))).await;
-        let _ = writer.flush().await;
+        let close_reason = Self::get_close_reason(ClientDisconnectionReason::Normal);
+        Self::close_and_flush(writer, close_reason).await;
         self.remove_client(client_id);
     }
 
     async fn deny_duplicate_client_connection(
         self: Arc<Self>,
-        mut writer: SplitWriter<Stream<Http1>>,
+        writer: SplitWriter<Stream<Http1>>,
         client_id: &str,
     ) {
-        let close_reason = CloseReason::new(
-            CloseReason::POLICY,
-            format!("Client with id {} already connected", client_id),
-        );
+        let close_reason = Self::get_close_reason(ClientDisconnectionReason::DuplicateClient(
+            client_id.to_string(),
+        ));
+        Self::close_and_flush(writer, close_reason).await;
+    }
+
+    async fn close_with_internal_error(self: Arc<Self>, writer: SplitWriter<Stream<Http1>>) {
+        let close_reason = Self::get_close_reason(ClientDisconnectionReason::Unknown);
+        Self::close_and_flush(writer, close_reason).await;
+    }
+
+    async fn close_and_flush(mut writer: SplitWriter<Stream<Http1>>, close_reason: CloseReason) {
         let _ = writer.send(Message::Close(Some(close_reason))).await;
         let _ = writer.flush().await;
     }
 
-    async fn close_with_internal_error(self: Arc<Self>, mut writer: SplitWriter<Stream<Http1>>) {
-        let close_reason =
-            CloseReason::new(CloseReason::INTERNAL, "Unknown error occurred".to_string());
-        let _ = writer.send(Message::Close(Some(close_reason))).await;
-        let _ = writer.flush().await;
+    fn get_close_reason(reason: ClientDisconnectionReason) -> CloseReason {
+        match reason {
+            ClientDisconnectionReason::Unknown => {
+                CloseReason::new(CloseReason::INTERNAL, "Internal error occurred")
+            }
+            ClientDisconnectionReason::Normal => {
+                CloseReason::new(CloseReason::NORMAL, "Connection closed")
+            }
+            ClientDisconnectionReason::DuplicateClient(identifier) => CloseReason::new(
+                CloseReason::POLICY,
+                format!("Client already registered with id {0}", identifier),
+            ),
+        }
     }
 }

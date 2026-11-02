@@ -5,3 +5,4 @@ pub(crate) mod messaging;
 pub(crate) mod kafka;
 pub(crate) mod client_cancellation_holder;
 pub(crate) mod client_tracking_info;
+pub(crate) mod client_disconnection_reason;
